@@ -1,0 +1,30 @@
+{
+  "author": "Jordi van Liempt",
+  "name": "cityjson-vue-components-rust",
+  "version": "0.0.2",
+  "repository": "https://github.com/rustwasm/rust-parcel-template",
+  "license": "Apache-2.0/MIT",
+  "scripts": {
+    "start": "parcel serve index.html",
+    "build": "parcel build index.html"
+  },
+  "bin": {
+    "create-rust-parcel": ".bin/create-rust-parcel.js"
+  },
+  "devDependencies": {
+    "@vue/component-compiler-utils": "^3.2.0",
+    "parcel-bundler": "^1.12.4",
+    "parcel-plugin-wasm.rs": "^1.2.16",
+    "vue-template-compiler": "^2.6.12",
+    "babel-plugin-transform-regenerator": "^6.26.0",
+    "babel-polyfill": "^6.26.0",
+    "@babel/plugin-transform-runtime": "^7.12.10"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.12.5",
+    "event-stream": "^4.0.1",
+    "vue": "^2.6.12",
+    "readable-stream-clone": "0.0.7",
+    "vue-hot-reload-api": "^2.3.4"
+  }
+}
