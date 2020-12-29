@@ -14,15 +14,13 @@ import JSONStream from 'JSONStream';
 import request from 'request';
 import Stream from 'event-stream';
 import ReadableStreamClone from 'readable-stream-clone';
+
+// Needed for async/await functionality (I think parcel needs it)
 import 'regenerator-runtime/runtime';
 
+// Import Rust functions
 import rust from '../crate/Cargo.toml';
 rust.init();
-console.log(rust.add(3,5));
-// rust.add(3, 5);
-
-
-// console.log(add(3,5));
 
 export default {
 	name: 'ThreeJsViewer',
@@ -152,9 +150,7 @@ export default {
 
 		await fetch("denhaag2.json")
 		.then(r => r.arrayBuffer())
-		.then(buf => rust.receive_blob(buf));
-
-
+		.then(buf => rust.receive_buf(buf));
 
 		setTimeout( async () => {
 

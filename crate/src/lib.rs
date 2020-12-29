@@ -22,6 +22,8 @@ use std::io;
 extern crate bincode;
 extern crate serde_json;
 
+///// Boilerplate code /////
+
 cfg_if! {
     // When the `console_error_panic_hook` feature is enabled, we can call the
     // `set_panic_hook` function to get better error messages if we ever panic.
@@ -63,18 +65,10 @@ macro_rules! log {
 }
 
 
-#[wasm_bindgen]
-pub fn add(a: i32, b: i32) -> i32 {
-
-    log!("add");
-
-    return a + b
-
-}
-
+///// CityJSON processing starts here /////
 
 #[wasm_bindgen]
-pub fn receive_blob(buf: ArrayBuffer) -> i32 {
+pub fn receive_buf(buf: ArrayBuffer) -> i32 {
 
     log!("hoi");
 
@@ -96,7 +90,7 @@ pub fn receive_blob(buf: ArrayBuffer) -> i32 {
 }
 
 
-////////////////////////////////////////////
+///// Serde (JSON) streaming code, adapted from https://serde.rs/stream-array.html /////
 #[derive(Deserialize)]
 struct Outer {
 
