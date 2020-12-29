@@ -16,11 +16,11 @@ import Stream from 'event-stream';
 import ReadableStreamClone from 'readable-stream-clone';
 import 'regenerator-runtime/runtime';
 
-import module from '../crate/Cargo.toml';
-module.init();
-console.log(module.add(3,5));
+import rust from '../crate/Cargo.toml';
+rust.init();
+console.log(rust.add(3,5));
 // rust.add(3, 5);
-// import { add } from '../crate/src/lib.rs';
+
 
 // console.log(add(3,5));
 
@@ -146,9 +146,15 @@ export default {
 
 	},
 
-	mounted() {
+	async mounted() {
 
 		this.$emit( 'rendering', true );
+
+		await fetch("denhaag2.json")
+		.then(r => r.arrayBuffer())
+		.then(buf => rust.receive_blob(buf));
+
+
 
 		setTimeout( async () => {
 
