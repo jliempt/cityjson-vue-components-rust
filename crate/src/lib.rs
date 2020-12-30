@@ -1,17 +1,23 @@
+#![allow(warnings)]
 #[macro_use]
-extern crate cfg_if;
 
+extern crate cfg_if;
 extern crate wasm_bindgen;
 extern crate web_sys;
+extern crate js_sys;
+extern crate serde;
+extern crate serde_bytes;
+extern crate serde_json;
+
 use wasm_bindgen::prelude::*;
 //use web_sys::Blob;
-extern crate js_sys;
+
 use js_sys::{ ArrayBuffer, Uint8Array };
 // use js_sys::JsString;
-extern crate serde;
+
 use serde::{Serialize, Deserialize, Deserializer};
-extern crate serde_bytes;
-use serde::de::{self, Visitor, SeqAccess};
+
+use serde::de::{self, Visitor, SeqAccess, MapAccess};
 
 use std::{cmp, fmt};
 use std::marker::PhantomData;
@@ -19,10 +25,12 @@ use std::marker::PhantomData;
 use std::collections::HashMap;
 use std::io;
 
-extern crate bincode;
-extern crate serde_json;
+use serde_json::Value;
 
-///// Boilerplate code /////
+use std::fmt::Display;
+
+
+///// Boilerplate code, from https://github.com/rustwasm/rust-parcel-template and I think the wasm-pack-template /////
 
 cfg_if! {
     // When the `console_error_panic_hook` feature is enabled, we can call the
@@ -68,88 +76,87 @@ macro_rules! log {
 ///// CityJSON processing starts here /////
 
 #[wasm_bindgen]
-pub fn receive_buf(buf: ArrayBuffer) -> i32 {
-
-    log!("hoi");
+pub fn receive_buf(buf: ArrayBuffer) {
 
     // Convert JsValue::ArrayBuffer to vector
-    let out: Vec<u8> = Uint8Array::new_with_byte_offset_and_length(
+    let bufVec: Vec<u8> = Uint8Array::new_with_byte_offset_and_length(
         &buf,
         0,
         buf.byte_length()
     ).to_vec();
 
-    let e = serde_bytes::ByteBuf::from(out);
+    // Convert vector into ByteBuf for Serde
+    let bufSerde = serde_bytes::ByteBuf::from(bufVec);
 
-    let out2: Outer = serde_json::from_slice(&e).unwrap();
-
-    log!("{}", out2.max_value);
-
-    10
+    // Serialize the CityJSON into vectors for Three.js BufferAttributes
+    let out: Outer = serde_json::from_slice(&bufSerde).unwrap();
 
 }
 
+// TODO: triangulation checker? (immediately count amount of triangles and vertices)
 
-///// Serde (JSON) streaming code, adapted from https://serde.rs/stream-array.html /////
+///// Serde (JSON) streaming code, adapted from https://serde.rs/stream-array.html and https://serde.rs/deserialize-map.html /////
+
 #[derive(Deserialize)]
 struct Outer {
 
-    // Deserialize this field by computing the maximum value of a sequence
-    // (JSON array) of values.
-    #[serde(deserialize_with = "deserialize_max")]
-    // Despite the struct field being named `max_value`, it is going to come
-    // from a JSON field called `values`.
-    #[serde(rename(deserialize = "vertices"))]
-    max_value: u64,
+    // Deserialize this field with this function, and specifify the key of the CityJSON data that needs to be deserialized
+
+    #[serde(deserialize_with = "deserialize_cityobjects")]
+    #[serde(rename(deserialize = "CityObjects"))]
+    max_value: HashMap<String, serde_json::Value>,
+
+    // triangles:
+    // colors:
 }
 
-/// Deserialize the maximum of a sequence of values. The entire sequence
-/// is not buffered into memory as it would be if we deserialize to Vec<T>
-/// and then compute the maximum later.
-///
-/// This function is generic over T which can be any type that implements
-/// Ord. Above, it is used with T=u64.
-fn deserialize_max<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+/// Deserialize the CityObjects into vectors that can be used for Three.js BufferAttributes
+fn deserialize_cityobjects<'de, K: Display, V: Display, D>(deserializer: D) -> Result<HashMap<K, V>, D::Error>
 where
-    T: Deserialize<'de> + Ord,
+
+    K: Deserialize<'de>,
+    V: Deserialize<'de>,
     D: Deserializer<'de>,
+
 {
-    struct MaxVisitor<T>(PhantomData<fn() -> T>);
 
-    impl<'de, T> Visitor<'de> for MaxVisitor<T>
+    struct COVisitor<K: Display, V: Display>(PhantomData<fn() -> K>, PhantomData<fn() -> V>);
+
+    impl<'de, K: Display, V: Display> Visitor<'de> for COVisitor<K, V>
     where
-        T: Deserialize<'de> + Ord,
+        K: Deserialize<'de>,
+        V: Deserialize<'de>,
     {
-        /// Return type of this visitor. This visitor computes the max of a
-        /// sequence of values of type T, so the type of the maximum is T.
-        type Value = T;
+        /// Return type of this visitor (a HashMap with keys and values)
+        type Value = HashMap<K, V>;
 
+        // Error message if data that is not of this type is encountered while deserializing
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
             formatter.write_str("a nonempty sequence of numbers")
         }
 
-        fn visit_seq<S>(self, mut seq: S) -> Result<T, S::Error>
+        // Traverse CityObjects
+        fn visit_map<S>(self, mut seq: S) -> Result<HashMap<K, V>, S::Error>
         where
-            S: SeqAccess<'de>,
+            S: MapAccess<'de>,
         {
-            // Start with max equal to the first value in the seq.
-            let mut max = seq.next_element()?.ok_or_else(||
-                // Cannot take the maximum of an empty seq.
-                de::Error::custom("no values in seq when looking for maximum")
-            )?;
 
-            // Update the max while there are additional values.
-            while let Some(value) = seq.next_element()? {
-                max = cmp::max(max, value);
+            while let Some((K,V)) = seq.next_entry::<K,V>()? {
+
+                log!("{}", K);
+                log!("{}", V);
+
             }
 
-            Ok(max)
+            Ok( HashMap::new() )
+
         }
     }
 
     // Create the visitor and ask the deserializer to drive it. The
-    // deserializer will call visitor.visit_seq() if a seq is present in
+    // deserializer will call visitor.visit_map() if a map is present in
     // the input data.
-    let visitor = MaxVisitor(PhantomData);
-    deserializer.deserialize_seq(visitor)
+    let visitor = COVisitor(PhantomData, PhantomData);
+    deserializer.deserialize_map(visitor)
+
 }
