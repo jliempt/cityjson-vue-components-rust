@@ -91,7 +91,7 @@ pub fn receive_buf(buf: ArrayBuffer) {
     // Serialize the CityJSON into vectors for Three.js BufferAttributes
     let out: CityJSONAttributes = serde_json::from_slice(&bufSerde).unwrap();
 
-    log!("{:?}", out.attributes.colors);
+    log!("{:?}", out.attributes.triangles);
 
 }
 
@@ -105,6 +105,7 @@ struct BufferAttributes {
 }
 
 // TODO: triangulation checker? (immediately count amount of triangles and vertices)
+// TODO: store object IDs from triangles in groups (i.e. [10, 15]) and perform binary search to find out to which group it belongs? Saves memory.
 
 ///// Serde (JSON) streaming code, adapted from https://serde.rs/stream-array.html, https://serde.rs/deserialize-map.html, and https://serde.rs/deserialize-struct.html /////
 
@@ -156,17 +157,10 @@ where
                 vertices: vertices,
                 ids: ids
             };
-        
-            ba.colors.push(5);
-            ba.triangles.push(6);
-            ba.vertices.push(7);
 
+            while let Some( ( key, value ) ) = map.next_entry::<String, serde_json::Value>()? {
 
-
-            while let Some((key, value)) = map.next_entry::<String, serde_json::Value>()? {
-
-                // log!("{}", key);
-                // log!("{}", value);
+                parse_cityobject( &key, &value, &mut ba );
 
             }
 
@@ -181,5 +175,91 @@ where
     // the input data.
 
     deserializer.deserialize_map(COVisitor)
+
+}
+
+fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttributes ) {
+
+    let co_type: String = co["type"].to_string();
+
+    let mut geom = co.get("geometry");
+
+    // Return early if the CityObject has no geometry
+    if geom.is_none() || geom.unwrap().as_array().unwrap().len() == 0 {
+
+        return;
+
+    }
+
+    let mut geom = geom.unwrap();
+
+    let geom_n = geom.as_array().unwrap().len();
+
+    for g_i in 0..geom_n {
+
+        let geom_type = &geom[g_i]["type"];
+
+        let boundaries = &geom[g_i]["boundaries"];
+        let boundaries_n = boundaries.as_array().unwrap().len();
+
+        
+        if geom_type == "Solid" {
+
+            for b_i in 0..boundaries_n {
+
+                parse_shell( &boundaries[b_i], ba );
+
+            }
+
+        }
+        else if geom_type == "MultiSurface" || geom_type == "CompositeSurface" {
+
+            parse_shell( &boundaries, ba );
+
+        }
+        else if geom_type == "MultiSolid" || geom_type == "CompositeSolid" {
+
+            for b_i in 0..boundaries_n {
+
+                let boundaries_inner_n = boundaries[b_i].as_array().unwrap().len();
+
+                for b_j in 0..boundaries_inner_n {
+
+                    parse_shell( &boundaries[b_i][b_j], ba );
+
+                }
+
+            }
+
+        }
+
+    }
+
+}
+
+fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes ){
+
+    let boundaries_n = boundaries.as_array().unwrap().len();
+
+    for b_i in 0..boundaries_n {
+
+        let boundary_n = boundaries[b_i][0].as_array().unwrap().len();
+
+        // TODO: Investigate how to handle holes. Now I just take [0] from the boundaries.
+
+        if boundary_n == 3 {
+
+            let v0: i32 = boundaries[b_i][0][0].as_i64().unwrap() as i32;
+            let v1: i32 = boundaries[b_i][0][1].as_i64().unwrap() as i32;
+            let v2: i32 = boundaries[b_i][0][2].as_i64().unwrap() as i32;
+
+            ba.triangles.push( v0 );
+            ba.triangles.push( v1 );
+            ba.triangles.push( v2 );
+
+        }
+        
+
+    }
 
 }
