@@ -25,7 +25,7 @@ use std::marker::PhantomData;
 use std::collections::HashMap;
 use std::io;
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use std::fmt::Display;
 
@@ -89,66 +89,89 @@ pub fn receive_buf(buf: ArrayBuffer) {
     let bufSerde = serde_bytes::ByteBuf::from(bufVec);
 
     // Serialize the CityJSON into vectors for Three.js BufferAttributes
-    let out: Outer = serde_json::from_slice(&bufSerde).unwrap();
+    let out: CityJSONAttributes = serde_json::from_slice(&bufSerde).unwrap();
 
+    log!("{:?}", out.attributes.colors);
+
+}
+
+struct BufferAttributes {
+
+    colors: Vec<i32>,
+    triangles: Vec<i32>,
+    vertices: Vec<i32>,
+    ids: Vec<String>
+    
 }
 
 // TODO: triangulation checker? (immediately count amount of triangles and vertices)
 
-///// Serde (JSON) streaming code, adapted from https://serde.rs/stream-array.html and https://serde.rs/deserialize-map.html /////
+///// Serde (JSON) streaming code, adapted from https://serde.rs/stream-array.html, https://serde.rs/deserialize-map.html, and https://serde.rs/deserialize-struct.html /////
 
 #[derive(Deserialize)]
-struct Outer {
+struct CityJSONAttributes {
 
     // Deserialize this field with this function, and specifify the key of the CityJSON data that needs to be deserialized
 
     #[serde(deserialize_with = "deserialize_cityobjects")]
     #[serde(rename(deserialize = "CityObjects"))]
-    max_value: HashMap<String, serde_json::Value>,
+    attributes: BufferAttributes,
 
-    // triangles:
-    // colors:
 }
 
 /// Deserialize the CityObjects into vectors that can be used for Three.js BufferAttributes
-fn deserialize_cityobjects<'de, K: Display, V: Display, D>(deserializer: D) -> Result<HashMap<K, V>, D::Error>
+fn deserialize_cityobjects<'de, D>(deserializer: D) -> Result<BufferAttributes, D::Error>
 where
 
-    K: Deserialize<'de>,
-    V: Deserialize<'de>,
     D: Deserializer<'de>,
 
 {
 
-    struct COVisitor<K: Display, V: Display>(PhantomData<fn() -> K>, PhantomData<fn() -> V>);
+    struct COVisitor;
 
-    impl<'de, K: Display, V: Display> Visitor<'de> for COVisitor<K, V>
-    where
-        K: Deserialize<'de>,
-        V: Deserialize<'de>,
+    impl<'de> Visitor<'de> for COVisitor
     {
-        /// Return type of this visitor (a HashMap with keys and values)
-        type Value = HashMap<K, V>;
+        /// Return type of this visitor
+        type Value = BufferAttributes;
 
         // Error message if data that is not of this type is encountered while deserializing
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a nonempty sequence of numbers")
+            formatter.write_str("a key/value entry")
         }
 
         // Traverse CityObjects
-        fn visit_map<S>(self, mut seq: S) -> Result<HashMap<K, V>, S::Error>
+        fn visit_map<S>(self, mut map: S) -> Result<BufferAttributes, S::Error>
         where
             S: MapAccess<'de>,
         {
 
-            while let Some((K,V)) = seq.next_entry::<K,V>()? {
+            let mut colors: Vec<i32> = Vec::new();
+            let mut triangles: Vec<i32> = Vec::new();
+            let mut vertices: Vec<i32> = Vec::new();
+            let mut ids: Vec<String> = Vec::new();
+        
+            let mut ba = BufferAttributes {
+                colors: colors,
+                triangles: triangles,
+                vertices: vertices,
+                ids: ids
+            };
+        
+            ba.colors.push(5);
+            ba.triangles.push(6);
+            ba.vertices.push(7);
 
-                log!("{}", K);
-                log!("{}", V);
+
+
+            while let Some((key, value)) = map.next_entry::<String, serde_json::Value>()? {
+
+                // log!("{}", key);
+                // log!("{}", value);
 
             }
 
-            Ok( HashMap::new() )
+            Ok( ba )
+
 
         }
     }
@@ -156,7 +179,7 @@ where
     // Create the visitor and ask the deserializer to drive it. The
     // deserializer will call visitor.visit_map() if a map is present in
     // the input data.
-    let visitor = COVisitor(PhantomData, PhantomData);
-    deserializer.deserialize_map(visitor)
+
+    deserializer.deserialize_map(COVisitor)
 
 }
