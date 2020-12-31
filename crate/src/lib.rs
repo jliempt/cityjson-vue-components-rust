@@ -97,9 +97,9 @@ pub fn receive_buf(buf: ArrayBuffer) {
 
 struct BufferAttributes {
 
-    colors: Vec<i32>,
-    triangles: Vec<i32>,
-    vertices: Vec<i32>,
+    colors: Vec<u32>,
+    triangles: Vec<u32>,
+    vertices: Vec<u32>,
     ids: Vec<String>
     
 }
@@ -146,9 +146,9 @@ where
             S: MapAccess<'de>,
         {
 
-            let mut colors: Vec<i32> = Vec::new();
-            let mut triangles: Vec<i32> = Vec::new();
-            let mut vertices: Vec<i32> = Vec::new();
+            let mut colors: Vec<u32> = Vec::new();
+            let mut triangles: Vec<u32> = Vec::new();
+            let mut vertices: Vec<u32> = Vec::new();
             let mut ids: Vec<String> = Vec::new();
         
             let mut ba = BufferAttributes {
@@ -249,9 +249,9 @@ fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes ){
 
         if boundary_n == 3 {
 
-            let v0: i32 = boundaries[b_i][0][0].as_i64().unwrap() as i32;
-            let v1: i32 = boundaries[b_i][0][1].as_i64().unwrap() as i32;
-            let v2: i32 = boundaries[b_i][0][2].as_i64().unwrap() as i32;
+            let v0: u32 = boundaries[b_i][0][0].as_i64().unwrap() as u32;
+            let v1: u32 = boundaries[b_i][0][1].as_i64().unwrap() as u32;
+            let v2: u32 = boundaries[b_i][0][2].as_i64().unwrap() as u32;
 
             ba.triangles.push( v0 );
             ba.triangles.push( v1 );
