@@ -9,6 +9,9 @@ extern crate serde;
 extern crate serde_bytes;
 extern crate serde_json;
 extern crate serde_wasm_bindgen;
+extern crate phf;
+
+use phf::{phf_map, phf_set};
 
 use wasm_bindgen::prelude::*;
 //use web_sys::Blob;
@@ -74,62 +77,64 @@ macro_rules! log {
 }
 
 
+
+
+static COLORS: phf::Map<&'static str, &'static [f32; 3]> = phf_map! {
+
+    "Building"                      => &[ 0.45, 0.59, 0.87 ],
+    "BuildingPart"                  => &[ 0.45, 0.59, 0.87 ],
+    "BuildingInstallation"          => &[ 0.45, 0.59, 0.87 ],
+    "Bridge"                        => &[ 0.6, 0.6, 0.6 ],
+    "BridgePart"                    => &[ 0.6, 0.6, 0.6 ],
+    "BridgeInstallation"            => &[ 0.6, 0.6, 0.6 ],
+    "BridgeConstructionElement"     => &[ 0.6, 0.6, 0.6 ],
+    "CityObjectGroup"               => &[ 1.0, 1.0, 0.70 ],
+    "CityFurniture"                 => &[ 0.8, 0.0, 0.0 ],
+    "GenericCityObject"             => &[ 0.8, 0.0, 0.0 ],
+    "LandUse"                       => &[ 1.0, 1.0, 0.70 ],
+    "PlantCover"                    => &[ 0.22, 0.67, 0.22 ],
+    "Railway"                       => &[ 0.0, 0.0, 0.0 ],
+    "Road"                          => &[ 0.6, 0.6, 0.6 ],
+    "SolitaryVegetationObject"      => &[ 0.22, 0.67, 0.22 ],
+    "TINRelief"                     => &[ 1.0, 0.86, 0.6 ],
+    "TransportSquare"               => &[ 0.6, 0.6, 0.6 ],
+    "Tunnel"                        => &[ 0.6, 0.6, 0.6 ],
+    "TunnelPart"                    => &[ 0.6, 0.6, 0.6 ],
+    "TunnelInstallation"            => &[ 0.6, 0.6, 0.6 ],
+    "WaterBody"                     => &[ 0.3, 0.65, 1.0 ],
+
+    
+};
+
+
 ///// CityJSON processing starts here /////
 
 #[wasm_bindgen]
-pub fn receive_buf(buf: JsValue) -> JsValue {
+pub fn receive_buf(buf: JsValue) -> wasm_bindgen::JsValue {
 
+    log!("Rust: ArrayBuffer received");
 
     let bufSerde: serde_bytes::ByteBuf = serde_wasm_bindgen::from_value(buf).unwrap();
 
-
-    // // Convert JsValue::ArrayBuffer to vector
-    // let bufVec: Vec<u8> = Uint8Array::new_with_byte_offset_and_length(
-    //     &buf,
-    //     0,
-    //     buf.byte_length()
-    // ).to_vec();
-
-    // // Convert vector into ByteBuf for Serde
-    // let bufSerde = serde_bytes::ByteBuf::from(bufVec);
+    log!("Rust: ArrayBuffer into ByteBuf");
 
     // Serialize the CityJSON into vectors for Three.js BufferAttributes
-    let mut out: CityJSONAttributes = serde_json::from_slice(&bufSerde).unwrap();
+    let out: CityJSONAttributes = serde_json::from_slice(&bufSerde).unwrap();
 
-    let mut deserialized: Value = serde_json::from_slice(&bufSerde).unwrap();
+    log!("{:?}", out.vertices);
 
+    log!("Rust: CityObjects and vertices parsed");
 
+    let res = serde_wasm_bindgen::to_value(&out).unwrap();
 
-    let mut vertices: Vec<[u32; 3]> = serde_json::from_value(deserialized["vertices"].take()).unwrap();
-    // log!("Vertices: {:?}", deserialized.get("vertices").unwrap());
-
-    let vertices = vertices.concat();
-
-    // let vertices_js = js_sys::Uint32Array::from(&vertices);
-
-    out.attributes.vertices = vertices;
-
-    let hoi = JsValue::from_serde(&out).unwrap();
-
-    hoi
-
-    // log!("{:?}", hoi);
-
-
-    // log!("Triangles: {:?}", out.attributes.triangles);
-
-
-    // let res1: js_sys::Array = vertices.into_iter().map(JsValue::from).collect();
-    // let res2: js_sys::Array = out.attributes.triangles.into_iter().map(JsValue::from).collect();
-
-
+    res
 
 }
 
 #[derive(Serialize, Deserialize)]
 struct BufferAttributes {
 
-    colors: Vec<u32>,
+    colors: Vec<f32>,
     triangles: Vec<u32>,
     vertices: Vec<u32>,
     ids: Vec<String>
@@ -148,11 +153,24 @@ struct BufferAttributes {
 #[derive(Serialize, Deserialize)]
 struct CityJSONAttributes {
 
+    vertices: serde_json::Value,
+
     // Deserialize this field with this function, and specifify the key of the CityJSON data that needs to be deserialized
 
     #[serde(deserialize_with = "deserialize_cityobjects")]
     #[serde(rename(deserialize = "CityObjects"))]
     attributes: BufferAttributes,
+
+}
+
+fn deserialize_vertices<'de, D>(deserializer: D) -> Result<Vec<u32>, D::Error>
+where
+
+    D: Deserializer<'de>,
+
+{
+
+    Ok( Vec::new() )
 
 }
 
@@ -182,7 +200,7 @@ where
             S: MapAccess<'de>,
         {
 
-            let mut colors: Vec<u32> = Vec::new();
+            let mut colors: Vec<f32> = Vec::new();
             let mut triangles: Vec<u32> = Vec::new();
             let mut vertices: Vec<u32> = Vec::new();
             let mut ids: Vec<String> = Vec::new();
@@ -216,7 +234,7 @@ where
 
 fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttributes ) {
 
-    let co_type: String = co["type"].to_string();
+    let co_type: &str = co["type"].as_str().unwrap();
 
     let mut geom = co.get("geometry");
 
@@ -243,14 +261,14 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttribu
 
             for b_i in 0..boundaries_n {
 
-                parse_shell( &boundaries[b_i], ba );
+                parse_shell( &boundaries[b_i], ba, co_type );
 
             }
 
         }
         else if geom_type == "MultiSurface" || geom_type == "CompositeSurface" {
 
-            parse_shell( &boundaries, ba );
+            parse_shell( &boundaries, ba, co_type );
 
         }
         else if geom_type == "MultiSolid" || geom_type == "CompositeSolid" {
@@ -261,7 +279,7 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttribu
 
                 for b_j in 0..boundaries_inner_n {
 
-                    parse_shell( &boundaries[b_i][b_j], ba );
+                    parse_shell( &boundaries[b_i][b_j], ba, co_type );
 
                 }
 
@@ -273,9 +291,11 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttribu
 
 }
 
-fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes ){
+fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes, co_type: &str ){
 
     let boundaries_n = boundaries.as_array().unwrap().len();
+
+    let color = COLORS.get( co_type ).unwrap();
 
     for b_i in 0..boundaries_n {
 
@@ -292,6 +312,10 @@ fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes ){
             ba.triangles.push( v0 );
             ba.triangles.push( v1 );
             ba.triangles.push( v2 );
+
+            ba.colors.push( color[ 0 ] );
+            ba.colors.push( color[ 1 ] );
+            ba.colors.push( color[ 2 ] );
 
         }
         
