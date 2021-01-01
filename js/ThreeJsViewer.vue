@@ -148,10 +148,6 @@ export default {
 
 		this.$emit( 'rendering', true );
 
-		await fetch("denhaag2.json")
-		.then(r => r.arrayBuffer())
-		.then(buf => rust.receive_buf(buf));
-
 		setTimeout( async () => {
 
 			var self = this;
@@ -160,6 +156,22 @@ export default {
 
 			// Already render before streaming has finished, so that the background is shown in the meantime.
 			this.renderer.render( this.scene, this.camera );
+
+			var ba;
+
+			await fetch("3db2.json")
+			.then(r => r.arrayBuffer())
+			.then(buf => rust.receive_buf(buf))
+			.then(function(res) {
+				self.indices = res.attributes.triangles;
+				self.vertices = res.vertices.flat();
+				self.colors = res.attributes.colors;
+			});
+
+			self.createGeometry();
+			self.renderer.render( self.scene, self.camera );
+
+
 
 
 			$( "#viewer" ).dblclick( function ( eventData ) {
@@ -299,7 +311,7 @@ export default {
 			material.vertexColors = true;
 
 			this.geometry.setIndex( this.indices );
-			// this.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( this.vertices, 3 ) );
+			this.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( this.vertices, 3 ) );
 			this.geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( this.colors, 3 ) );
 			this.geometry.computeBoundingSphere();
 
