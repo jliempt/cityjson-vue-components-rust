@@ -8,6 +8,7 @@ extern crate js_sys;
 extern crate serde;
 extern crate serde_bytes;
 extern crate serde_json;
+extern crate serde_wasm_bindgen;
 
 use wasm_bindgen::prelude::*;
 //use web_sys::Blob;
@@ -76,25 +77,56 @@ macro_rules! log {
 ///// CityJSON processing starts here /////
 
 #[wasm_bindgen]
-pub fn receive_buf(buf: ArrayBuffer) {
+pub fn receive_buf(buf: JsValue) -> JsValue {
 
-    // Convert JsValue::ArrayBuffer to vector
-    let bufVec: Vec<u8> = Uint8Array::new_with_byte_offset_and_length(
-        &buf,
-        0,
-        buf.byte_length()
-    ).to_vec();
 
-    // Convert vector into ByteBuf for Serde
-    let bufSerde = serde_bytes::ByteBuf::from(bufVec);
+    let bufSerde: serde_bytes::ByteBuf = serde_wasm_bindgen::from_value(buf).unwrap();
+
+
+    // // Convert JsValue::ArrayBuffer to vector
+    // let bufVec: Vec<u8> = Uint8Array::new_with_byte_offset_and_length(
+    //     &buf,
+    //     0,
+    //     buf.byte_length()
+    // ).to_vec();
+
+    // // Convert vector into ByteBuf for Serde
+    // let bufSerde = serde_bytes::ByteBuf::from(bufVec);
 
     // Serialize the CityJSON into vectors for Three.js BufferAttributes
-    let out: CityJSONAttributes = serde_json::from_slice(&bufSerde).unwrap();
+    let mut out: CityJSONAttributes = serde_json::from_slice(&bufSerde).unwrap();
 
-    log!("{:?}", out.attributes.triangles);
+    let mut deserialized: Value = serde_json::from_slice(&bufSerde).unwrap();
+
+
+
+    let mut vertices: Vec<[u32; 3]> = serde_json::from_value(deserialized["vertices"].take()).unwrap();
+    // log!("Vertices: {:?}", deserialized.get("vertices").unwrap());
+
+    let vertices = vertices.concat();
+
+    // let vertices_js = js_sys::Uint32Array::from(&vertices);
+
+    out.attributes.vertices = vertices;
+
+    let hoi = JsValue::from_serde(&out).unwrap();
+
+    hoi
+
+    // log!("{:?}", hoi);
+
+
+    // log!("Triangles: {:?}", out.attributes.triangles);
+
+
+    // let res1: js_sys::Array = vertices.into_iter().map(JsValue::from).collect();
+    // let res2: js_sys::Array = out.attributes.triangles.into_iter().map(JsValue::from).collect();
+
+
 
 }
 
+#[derive(Serialize, Deserialize)]
 struct BufferAttributes {
 
     colors: Vec<u32>,
@@ -106,10 +138,14 @@ struct BufferAttributes {
 
 // TODO: triangulation checker? (immediately count amount of triangles and vertices)
 // TODO: store object IDs from triangles in groups (i.e. [10, 15]) and perform binary search to find out to which group it belongs? Saves memory.
+// https://serde.rs/stream-array.html https://docs.serde.rs/serde/de/struct.IgnoredAny.html http://oboejs.com/
+
+
+
 
 ///// Serde (JSON) streaming code, adapted from https://serde.rs/stream-array.html, https://serde.rs/deserialize-map.html, and https://serde.rs/deserialize-struct.html /////
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct CityJSONAttributes {
 
     // Deserialize this field with this function, and specifify the key of the CityJSON data that needs to be deserialized
