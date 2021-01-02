@@ -161,11 +161,24 @@ export default {
 
 			await fetch("3db2.json")
 			.then(r => r.arrayBuffer())
-			.then(buf => rust.receive_buf(buf))
-			.then(function(res) {
+			.then(function(buf) {
+
+				var arr = new Uint8Array(buf);
+
+				var buffer = new rust.WasmMemBuffer(arr.length, array => {
+				// "array" wraps a piece of wasm memory. Fill it with some values.
+				array.set( arr )
+				})
+
+				return rust.receive_buf(buffer);
+
+			})
+			.then( function(res) {
+
 				self.indices = res.attributes.triangles;
 				self.vertices = res.vertices.flat();
 				self.colors = res.attributes.colors;
+
 			});
 
 			self.createGeometry();

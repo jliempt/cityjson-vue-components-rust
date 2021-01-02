@@ -77,6 +77,31 @@ macro_rules! log {
 }
 
 
+#[wasm_bindgen]
+pub struct WasmMemBuffer {
+    buffer: Vec<u8>,
+}
+
+#[wasm_bindgen]
+impl WasmMemBuffer {
+    #[wasm_bindgen(constructor)]
+    pub fn new(byte_length: u32, f: &js_sys::Function) -> Self {
+        let mut buffer: Vec<u8> = Vec::new();
+        buffer.reserve(byte_length as usize);
+        unsafe {
+            let array =
+                js_sys::Uint8Array::view_mut_raw(buffer.as_mut_ptr(),
+                                                 byte_length as usize);
+            f.call1(&JsValue::NULL, &JsValue::from(array))
+                .expect("The callback function should not throw");
+            buffer.set_len(byte_length as usize);
+        }
+        Self { buffer }
+    }
+}
+
+
+
 
 
 static COLORS: phf::Map<&'static str, &'static [f32; 3]> = phf_map! {
@@ -110,22 +135,17 @@ static COLORS: phf::Map<&'static str, &'static [f32; 3]> = phf_map! {
 ///// CityJSON processing starts here /////
 
 #[wasm_bindgen]
-pub fn receive_buf(buf: JsValue) -> wasm_bindgen::JsValue {
+pub fn receive_buf(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
     log!("Rust: ArrayBuffer received");
 
-    let bufSerde: serde_bytes::ByteBuf = serde_wasm_bindgen::from_value(buf).unwrap();
-
-    log!("Rust: ArrayBuffer into ByteBuf");
-
-    // Serialize the CityJSON into vectors for Three.js BufferAttributes
-    let out: CityJSONAttributes = serde_json::from_slice(&bufSerde).unwrap();
-
-    log!("{:?}", out.vertices);
+    let out: CityJSONAttributes = serde_json::from_slice(&buf.buffer).unwrap();
 
     log!("Rust: CityObjects and vertices parsed");
 
+    log!("Hoe snel");
     let res = serde_wasm_bindgen::to_value(&out).unwrap();
+    log!("Is dit");
 
     res
 
@@ -153,14 +173,19 @@ struct BufferAttributes {
 #[derive(Serialize, Deserialize)]
 struct CityJSONAttributes {
 
-    vertices: serde_json::Value,
-
     // Deserialize this field with this function, and specifify the key of the CityJSON data that needs to be deserialized
 
     #[serde(deserialize_with = "deserialize_cityobjects")]
     #[serde(rename(deserialize = "CityObjects"))]
     attributes: BufferAttributes,
 
+    vertices: serde_json::Value,
+
+}
+
+#[derive(Deserialize)]
+struct vertices {
+    vertices: serde_json::Value
 }
 
 fn deserialize_vertices<'de, D>(deserializer: D) -> Result<Vec<u32>, D::Error>
@@ -200,6 +225,8 @@ where
             S: MapAccess<'de>,
         {
 
+            let mut i = 1;
+
             let mut colors: Vec<f32> = Vec::new();
             let mut triangles: Vec<u32> = Vec::new();
             let mut vertices: Vec<u32> = Vec::new();
@@ -215,6 +242,12 @@ where
             while let Some( ( key, value ) ) = map.next_entry::<String, serde_json::Value>()? {
 
                 parse_cityobject( &key, &value, &mut ba );
+
+                if i % 1000 == 0 {
+                    log!("{}", i);
+                }
+
+                i += 1;
 
             }
 
