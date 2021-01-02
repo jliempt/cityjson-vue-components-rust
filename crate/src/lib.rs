@@ -6,39 +6,23 @@ extern crate wasm_bindgen;
 extern crate web_sys;
 extern crate js_sys;
 extern crate serde;
-extern crate serde_bytes;
 extern crate serde_json;
 extern crate serde_wasm_bindgen;
 extern crate phf;
-extern crate serde_query;
 extern crate lazy_static;
 
 use lazy_static::lazy_static;
 use std::sync::Mutex;
-
 use phf::{phf_map, phf_set};
-
 use wasm_bindgen::prelude::*;
-//use web_sys::Blob;
-
-use js_sys::{ ArrayBuffer, Uint8Array };
-// use js_sys::JsString;
-
 use serde::{Serialize, Deserialize, Deserializer};
-
-use serde::de::{self, Visitor, SeqAccess, MapAccess};
-
+use serde::de::{self, Visitor, MapAccess};
+use serde_json::{Value, json};
 use std::{cmp, fmt};
 use std::marker::PhantomData;
-
 use std::collections::HashMap;
 use std::io;
-
-use serde_json::{Value, json};
-
 use std::fmt::Display;
-
-use serde_query::{DeserializeQuery, Query};
 
 
 ///// Boilerplate code, from https://github.com/rustwasm/rust-parcel-template and I think the wasm-pack-template /////
