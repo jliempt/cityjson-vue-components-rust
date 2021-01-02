@@ -156,11 +156,12 @@ pub fn receive_buf(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
     log!("Rust: CityObjects and vertices parsed");
 
-    let res = serde_wasm_bindgen::to_value(&out).unwrap();
-
-    res
+    // Parse into JsValue to be able to return it to JS
+    serde_wasm_bindgen::to_value(&out).unwrap()
 
 }
+
+///// Serde (JSON) streaming code, adapted from https://serde.rs/stream-array.html, https://serde.rs/deserialize-map.html, and https://serde.rs/deserialize-struct.html /////
 
 #[derive(Serialize, Deserialize)]
 struct BufferAttributes {
@@ -172,24 +173,15 @@ struct BufferAttributes {
     
 }
 
-// TODO: triangulation checker? (immediately count amount of triangles and vertices)
-// TODO: store object IDs from triangles in groups (i.e. [10, 15]) and perform binary search to find out to which group it belongs? Saves memory.
-// https://serde.rs/stream-array.html https://docs.serde.rs/serde/de/struct.IgnoredAny.html http://oboejs.com/
-
-
-
-
-///// Serde (JSON) streaming code, adapted from https://serde.rs/stream-array.html, https://serde.rs/deserialize-map.html, and https://serde.rs/deserialize-struct.html /////
-
 #[derive(Serialize, Deserialize)]
 struct CityJSONAttributes {
 
-    // Deserialize this field with this function, and specifify the key of the CityJSON data that needs to be deserialized
-
+    // Iterate over CityObjects and parse them into BufferAttributes
     #[serde(deserialize_with = "deserialize_cityobjects")]
     #[serde(rename(deserialize = "CityObjects"))]
     attributes: BufferAttributes,
 
+    // Retrieve vertices
     vertices: serde_json::Value,
 
 }
@@ -373,7 +365,7 @@ fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes, co_ty
 #[derive(Serialize, Deserialize)]
 struct CityObject {
 
-    // Deserialize this field with this function, and specifify the key of the CityJSON data that needs to be deserialized
+    // In global variable CO_ID a CityObject ID is stored. The deserialization function will iterate over the CityObjects and find the one.
 
     #[serde(deserialize_with = "deserialize_single_cityobject")]
     #[serde(rename(deserialize = "CityObjects"))]
@@ -381,6 +373,7 @@ struct CityObject {
 
 }
 
+// Similar to fn deserialize_cityobjects()
 fn deserialize_single_cityobject<'de, D>(deserializer: D) -> Result<serde_json::Value, D::Error>
 where
 
@@ -406,8 +399,10 @@ where
             S: MapAccess<'de>,
         {
 
+            // Get selected CityObject ID from global variable (since it's seemingly not possible to pass variables to Serde)
             let id = CO_ID.lock().unwrap();
 
+            // Init output
             let mut out = json!({});
 
             while let Some( ( key, value ) ) = map.next_entry::<String, serde_json::Value>()? {
@@ -429,16 +424,17 @@ where
         }
     }
 
-    // Create the visitor and ask the deserializer to drive it. The
-    // deserializer will call visitor.visit_map() if a map is present in
-    // the input data.
-
     deserializer.deserialize_map(COVisitor)
 
 }
 
 ///// Retrieving CityObjects from a WasmMemBuffer /////
 
+// Define a global mutable variable to store the ID of the clicked CityObject in.
+// https://stackoverflow.com/questions/27791532/how-do-i-create-a-global-mutable-singleton
+// It's very ugly, but it doesn't seem possible to pass variables to Serde deserializer.
+// Here, it's done with a static value so it's not useful: https://github.com/serde-rs/serde/issues/1059
+// serde_query looked nice but also can't take variables: https://docs.rs/serde-query/0.1.3/serde_query/
 lazy_static! {
     static ref CO_ID: Mutex<String> = Mutex::new("".to_string());
 }
@@ -447,12 +443,16 @@ lazy_static! {
 #[wasm_bindgen]
 pub fn get_attributes( buf: &WasmMemBuffer, selected_id: String ) -> wasm_bindgen::JsValue {
 
+    // Lock the global variable so that other processes can't access it, and take its value.
     let mut co_id = CO_ID.lock().unwrap();
 
+    // Update it to the selected ID
     *co_id = selected_id;
 
+    // Unlock it
     drop(co_id);
 
+    // Retrieve selected CityObject
     let out: CityObject = serde_json::from_slice(&buf.buffer).unwrap();
 
     JsValue::from_serde(&out.attributes).unwrap()
