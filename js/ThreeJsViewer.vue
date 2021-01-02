@@ -102,7 +102,7 @@ export default {
 				var coType = this.citymodel.CityObjects[ oldID ].type;
 				var color = new THREE.Color( this.object_colors[ coType ] );
 
-				this.updateCOColor( color, oldID );
+				// this.updateCOColor( color, oldID );
 
 			}
 
@@ -110,7 +110,10 @@ export default {
 
 				color = new THREE.Color( 0xdda500 );
 
-				this.updateCOColor( color, newID );
+				var attr = rust.get_attributes( this.buffer, newID );
+				console.log( attr );
+
+				// this.updateCOColor( color, newID );
 
 			}
 
@@ -141,6 +144,7 @@ export default {
 		this.rawStream;
 		this.verticesLength = 0;
 		this.targetProxy;
+		this.buffer;
 
 	},
 
@@ -157,20 +161,20 @@ export default {
 			// Already render before streaming has finished, so that the background is shown in the meantime.
 			this.renderer.render( this.scene, this.camera );
 
-			var ba;
-
 			await fetch("3db2.json")
 			.then(r => r.arrayBuffer())
 			.then(function(buf) {
 
 				var arr = new Uint8Array(buf);
 
-				var buffer = new rust.WasmMemBuffer(arr.length, array => {
+				// See https://github.com/rustwasm/wasm-bindgen/issues/1079, https://github.com/rustwasm/wasm-bindgen/issues/1643
+				// Code has been sourced from there.
+				self.buffer = new rust.WasmMemBuffer(arr.length, array => {
 				// "array" wraps a piece of wasm memory. Fill it with some values.
 				array.set( arr )
 				})
 
-				return rust.receive_buf(buffer);
+				return rust.receive_buf(self.buffer);
 
 			})
 			.then( function(res) {
@@ -178,14 +182,12 @@ export default {
 				self.indices = res.attributes.triangles;
 				self.vertices = res.vertices.flat();
 				self.colors = res.attributes.colors;
-
+				self.faceIDs = res.attributes.ids;
+				
 			});
 
 			self.createGeometry();
 			self.renderer.render( self.scene, self.camera );
-
-
-
 
 			$( "#viewer" ).dblclick( function ( eventData ) {
 
@@ -205,10 +207,15 @@ export default {
 
 	methods: {
 
+		findIDFaces( coId ) {
+
+
+
+		},
+
 		updateCOColor( color, coID ) {
 
-			var firstFaceID = this.idFaces[ coID ][ 0 ];
-			var lastFaceID = this.idFaces[ coID ][ 1 ];
+
 
 			for ( var i = firstFaceID; i <= lastFaceID; i ++ ) {
 

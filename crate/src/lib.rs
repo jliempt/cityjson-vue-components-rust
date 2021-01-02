@@ -10,6 +10,11 @@ extern crate serde_bytes;
 extern crate serde_json;
 extern crate serde_wasm_bindgen;
 extern crate phf;
+extern crate serde_query;
+extern crate lazy_static;
+
+use lazy_static::lazy_static;
+use std::sync::Mutex;
 
 use phf::{phf_map, phf_set};
 
@@ -32,6 +37,8 @@ use std::io;
 use serde_json::{Value, json};
 
 use std::fmt::Display;
+
+use serde_query::{DeserializeQuery, Query};
 
 
 ///// Boilerplate code, from https://github.com/rustwasm/rust-parcel-template and I think the wasm-pack-template /////
@@ -77,6 +84,10 @@ macro_rules! log {
 }
 
 
+
+// This allows the creation and direct use of buffers in WASM memory. It avoids having to copy an ArrayBuffer from JS to Rust, which would mean that the data is in memory twice.
+// See https://github.com/rustwasm/wasm-bindgen/issues/1079, https://github.com/rustwasm/wasm-bindgen/issues/1643
+// Code has been sourced from there.
 #[wasm_bindgen]
 pub struct WasmMemBuffer {
     buffer: Vec<u8>,
@@ -101,9 +112,7 @@ impl WasmMemBuffer {
 }
 
 
-
-
-
+// Global map with RGB values for all CityObject types
 static COLORS: phf::Map<&'static str, &'static [f32; 3]> = phf_map! {
 
     "Building"                      => &[ 0.45, 0.59, 0.87 ],
@@ -128,7 +137,6 @@ static COLORS: phf::Map<&'static str, &'static [f32; 3]> = phf_map! {
     "TunnelInstallation"            => &[ 0.6, 0.6, 0.6 ],
     "WaterBody"                     => &[ 0.3, 0.65, 1.0 ],
 
-    
 };
 
 
@@ -137,15 +145,18 @@ static COLORS: phf::Map<&'static str, &'static [f32; 3]> = phf_map! {
 #[wasm_bindgen]
 pub fn receive_buf(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
+    // let mut arr = js_sys::Array::new_with_length(4);
+
+    // arr.set(0, js_sys::Uint32Array::new());
+
     log!("Rust: ArrayBuffer received");
 
+    // Take the buffer and deserialize it into a CityJSONAttributes
     let out: CityJSONAttributes = serde_json::from_slice(&buf.buffer).unwrap();
 
     log!("Rust: CityObjects and vertices parsed");
 
-    log!("Hoe snel");
     let res = serde_wasm_bindgen::to_value(&out).unwrap();
-    log!("Is dit");
 
     res
 
@@ -294,14 +305,14 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttribu
 
             for b_i in 0..boundaries_n {
 
-                parse_shell( &boundaries[b_i], ba, co_type );
+                parse_shell( &boundaries[b_i], ba, co_type, id );
 
             }
 
         }
         else if geom_type == "MultiSurface" || geom_type == "CompositeSurface" {
 
-            parse_shell( &boundaries, ba, co_type );
+            parse_shell( &boundaries, ba, co_type, id );
 
         }
         else if geom_type == "MultiSolid" || geom_type == "CompositeSolid" {
@@ -312,7 +323,7 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttribu
 
                 for b_j in 0..boundaries_inner_n {
 
-                    parse_shell( &boundaries[b_i][b_j], ba, co_type );
+                    parse_shell( &boundaries[b_i][b_j], ba, co_type, id );
 
                 }
 
@@ -324,7 +335,7 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttribu
 
 }
 
-fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes, co_type: &str ){
+fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes, co_type: &str, id: &str ){
 
     let boundaries_n = boundaries.as_array().unwrap().len();
 
@@ -350,9 +361,100 @@ fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes, co_ty
             ba.colors.push( color[ 1 ] );
             ba.colors.push( color[ 2 ] );
 
+            ba.ids.push( id.to_string() )
+
         }
         
-
     }
+
+}
+
+
+#[derive(Serialize, Deserialize)]
+struct CityObject {
+
+    // Deserialize this field with this function, and specifify the key of the CityJSON data that needs to be deserialized
+
+    #[serde(deserialize_with = "deserialize_single_cityobject")]
+    #[serde(rename(deserialize = "CityObjects"))]
+    attributes: serde_json::Value,
+
+}
+
+fn deserialize_single_cityobject<'de, D>(deserializer: D) -> Result<serde_json::Value, D::Error>
+where
+
+    D: Deserializer<'de>,
+
+{
+
+    struct COVisitor;
+
+    impl<'de> Visitor<'de> for COVisitor
+    {
+        /// Return type of this visitor
+        type Value = serde_json::Value;
+
+        // Error message if data that is not of this type is encountered while deserializing
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a key/value entry")
+        }
+
+        // Traverse CityObjects
+        fn visit_map<S>(self, mut map: S) -> Result<serde_json::Value, S::Error>
+        where
+            S: MapAccess<'de>,
+        {
+
+            let id = CO_ID.lock().unwrap();
+
+            let mut out = json!({});
+
+            while let Some( ( key, value ) ) = map.next_entry::<String, serde_json::Value>()? {
+
+                if key == *id {
+
+                    out = value;
+
+                    // This would cause an error, why?
+                    // break;
+
+                }
+
+            }
+
+            Ok( out )
+
+
+        }
+    }
+
+    // Create the visitor and ask the deserializer to drive it. The
+    // deserializer will call visitor.visit_map() if a map is present in
+    // the input data.
+
+    deserializer.deserialize_map(COVisitor)
+
+}
+
+///// Retrieving CityObjects from a WasmMemBuffer /////
+
+lazy_static! {
+    static ref CO_ID: Mutex<String> = Mutex::new("".to_string());
+}
+
+
+#[wasm_bindgen]
+pub fn get_attributes( buf: &WasmMemBuffer, selected_id: String ) -> wasm_bindgen::JsValue {
+
+    let mut co_id = CO_ID.lock().unwrap();
+
+    *co_id = selected_id;
+
+    drop(co_id);
+
+    let out: CityObject = serde_json::from_slice(&buf.buffer).unwrap();
+
+    JsValue::from_serde(&out.attributes).unwrap()
 
 }
