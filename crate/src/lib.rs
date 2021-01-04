@@ -136,12 +136,12 @@ pub fn receive_buf(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
     log!("Rust: ArrayBuffer received");
 
     // Take the buffer and deserialize it into a CityJSONAttributes
-    let out: CityJSONAttributes = serde_json::from_slice(&buf.buffer).unwrap();
+    let out: CityJSONAttributes = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
 
     log!("Rust: CityObjects and vertices parsed");
 
     // Parse into JsValue to be able to return it to JS
-    serde_wasm_bindgen::to_value(&out).unwrap()
+    serde_wasm_bindgen::to_value(&out).expect("Could not convert serde_json::Value into JsValue")
 
 }
 
@@ -254,7 +254,7 @@ where
 
 fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttributes ) {
 
-    let co_type: &str = co["type"].as_str().unwrap();
+    let co_type: &str = co["type"].as_str().expect("CityObject has no valid type");
 
     let mut geom = co.get("geometry");
 
@@ -265,7 +265,7 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttribu
 
     }
 
-    let mut geom = geom.unwrap();
+    let mut geom = geom.expect("CityObject does not have \"geometry\"");
 
     let geom_n = geom.as_array().unwrap().len();
 
@@ -274,7 +274,7 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttribu
         let geom_type = &geom[g_i]["type"];
 
         let boundaries = &geom[g_i]["boundaries"];
-        let boundaries_n = boundaries.as_array().unwrap().len();
+        let boundaries_n = boundaries.as_array().expect("CityObject does not have \"boundaries\"").len();
 
         
         if geom_type == "Solid" {
@@ -295,7 +295,7 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttribu
 
             for b_i in 0..boundaries_n {
 
-                let boundaries_inner_n = boundaries[b_i].as_array().unwrap().len();
+                let boundaries_inner_n = boundaries[b_i].as_array().expect("CityObject something wrong with \"boundaries\"").len();
 
                 for b_j in 0..boundaries_inner_n {
 
@@ -319,7 +319,7 @@ fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes, co_ty
 
     for b_i in 0..boundaries_n {
 
-        let boundary_n = boundaries[b_i][0].as_array().unwrap().len();
+        let boundary_n = boundaries[b_i][0].as_array().expect("CityObject something wrong with \"boundaries\"").len();
 
         // TODO: Investigate how to handle holes. Now I just take [0] from the boundaries.
 
@@ -437,8 +437,8 @@ pub fn get_attributes( buf: &WasmMemBuffer, selected_id: String ) -> wasm_bindge
     drop(co_id);
 
     // Retrieve selected CityObject
-    let out: CityObject = serde_json::from_slice(&buf.buffer).unwrap();
+    let out: CityObject = serde_json::from_slice(&buf.buffer).expect("Error getting attributes");
 
-    JsValue::from_serde(&out.attributes).unwrap()
+    JsValue::from_serde(&out.attributes).expect("Could not convert serde_json::Value into JsValue (attributes)")
 
 }
