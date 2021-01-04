@@ -1,9 +1,10 @@
 use phf::{phf_map, phf_set};
 use wasm_bindgen::prelude::*;
 use serde::{Serialize, Deserialize, Deserializer};
-use serde::de::{self, Visitor, MapAccess};
+use serde::de::{self, Visitor, MapAccess, DeserializeSeed, SeqAccess};
 use serde_json::{Value, json};
 use std::fmt;
+use std::marker::PhantomData;
 use super::{WasmMemBuffer};
 
 
@@ -37,19 +38,29 @@ static COLORS: phf::Map<&'static str, &'static [f32; 3]> = phf_map! {
 #[wasm_bindgen]
 pub fn receive_buf(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
-    // let mut arr = js_sys::Array::new_with_length(4);
-
-    // arr.set(0, js_sys::Uint32Array::new());
-
     log!("Rust: ArrayBuffer received");
 
     // Take the buffer and deserialize it into a CityJSONAttributes
-    let out: CityJSONAttributes = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
+    let mut out: CityJSONAttributes = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
+    // let vertices: Vertices = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
+
+    // out.attributes.vertices = vertices.vertices;
 
     log!("Rust: CityObjects and vertices parsed");
 
     // Parse into JsValue to be able to return it to JS
     serde_wasm_bindgen::to_value(&out).expect("Could not convert serde_json::Value into JsValue")
+
+}
+
+#[wasm_bindgen]
+pub fn get_vertices(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
+
+    let vertices: Vertices = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
+    
+    log!("Vertices parsed");
+    
+    serde_wasm_bindgen::to_value(&vertices).expect("Could not convert serde_json::Value into JsValue")
 
 }
 
@@ -72,25 +83,6 @@ struct CityJSONAttributes {
     #[serde(deserialize_with = "deserialize_cityobjects")]
     #[serde(rename(deserialize = "CityObjects"))]
     attributes: BufferAttributes,
-
-    // Retrieve vertices
-    vertices: serde_json::Value,
-
-}
-
-#[derive(Deserialize)]
-struct vertices {
-    vertices: serde_json::Value
-}
-
-fn deserialize_vertices<'de, D>(deserializer: D) -> Result<Vec<u32>, D::Error>
-where
-
-    D: Deserializer<'de>,
-
-{
-
-    Ok( Vec::new() )
 
 }
 
@@ -139,7 +131,7 @@ where
                 parse_cityobject( &key, &value, &mut ba );
 
                 if i % 1000 == 0 {
-                    log!("{}", i);
+                    log!("{} CityObjects parsed", i);
                 }
 
                 i += 1;
@@ -245,7 +237,7 @@ fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes, co_ty
             ba.colors.push( color[ 1 ] );
             ba.colors.push( color[ 2 ] );
 
-            ba.ids.push( id.to_string() )
+            // a.ids.push( id.to_string() )
 
         }
         
@@ -253,3 +245,109 @@ fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes, co_ty
 
 }
 
+#[derive(Serialize, Deserialize)]
+struct Vertices {
+    
+    #[serde(deserialize_with = "deserialize_vertices")]
+    vertices: Vec<u32>,
+    
+}
+
+
+// From https://docs.serde.rs/serde/de/trait.DeserializeSeed.html
+fn deserialize_vertices<'de, D>(deserializer: D) -> Result<Vec<u32>, D::Error>
+    where
+
+    D: Deserializer<'de>,
+
+{
+
+    // A DeserializeSeed implementation that uses stateful deserialization to
+    // append array elements onto the end of an existing vector. The preexisting
+    // state ("seed") in this case is the Vec<T>. The `deserialize` method of
+    // `ExtendVec` will be traversing the inner arrays of the JSON input and
+    // appending each integer into the existing Vec.
+    struct ExtendVec<'a, T: 'a>(&'a mut Vec<T>);
+
+    impl<'de, 'a, T> DeserializeSeed<'de> for ExtendVec<'a, T>
+    where
+        T: Deserialize<'de>,
+    {
+        // The return type of the `deserialize` method. This implementation
+        // appends onto an existing vector but does not create any new data
+        // structure, so the return type is ().
+        type Value = ();
+
+        fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            // Visitor implementation that will walk an inner array of the JSON
+            // input.
+            struct ExtendVecVisitor<'a, T: 'a>(&'a mut Vec<T>);
+
+            impl<'de, 'a, T> Visitor<'de> for ExtendVecVisitor<'a, T>
+            where
+                T: Deserialize<'de>,
+            {
+                type Value = ();
+
+                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    write!(formatter, "an array of integers")
+                }
+
+                fn visit_seq<A>(self, mut seq: A) -> Result<(), A::Error>
+                where
+                    A: SeqAccess<'de>,
+                {
+                    // Visit each element in the inner array and push it onto
+                    // the existing vector.
+                    while let Some(elem) = seq.next_element()? {
+                        self.0.push(elem);
+                    }
+                    Ok(())
+                }
+            }
+
+            deserializer.deserialize_seq(ExtendVecVisitor(self.0))
+        }
+    }
+
+    // Visitor implementation that will walk the outer array of the JSON input.
+    struct FlattenedVecVisitor<T>(PhantomData<T>);
+
+    impl<'de, T> Visitor<'de> for FlattenedVecVisitor<T>
+    where
+        T: Deserialize<'de>,
+    {
+        // This Visitor constructs a single Vec<T> to hold the flattened
+        // contents of the inner arrays.
+        type Value = Vec<T>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            write!(formatter, "an array of arrays")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Vec<T>, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            // Create a single Vec to hold the flattened contents.
+            let mut vec = Vec::new();
+
+            // Each iteration through this loop is one inner array.
+            while let Some(()) = seq.next_element_seed(ExtendVec(&mut vec))? {
+                // Nothing to do; inner array has been appended into `vec`.
+            }
+
+            // Return the finished vec.
+            Ok(vec)
+        }
+    }
+
+    let visitor = FlattenedVecVisitor(PhantomData);
+    let flattened: Vec<u32> = deserializer.deserialize_seq(visitor)?;
+
+    Ok(flattened)
+
+}

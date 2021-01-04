@@ -22,7 +22,7 @@ import 'regenerator-runtime/runtime';
 import rust from '../crate/Cargo.toml';
 rust.init();
 
-const filePath = "3db2.json"
+const filePath = "45bz1.json"
 
 export default {
 	name: 'ThreeJsViewer',
@@ -181,10 +181,25 @@ export default {
 			})
 			.then( function( res ) {
 
-				self.indices = res.attributes.triangles;
-				self.vertices = res.vertices.flat();
-				self.colors = res.attributes.colors;
+				// self.indices = res.attributes.triangles;
+				//self.vertices = res.attributes.vertices;
+				// self.colors = res.attributes.colors;
+
+					function disposeArray() {
+
+					this.array = null;
+
+				}
+
 				self.faceIDs = res.attributes.ids;
+
+				self.geometry.setIndex( res.attributes.triangles );
+
+				self.geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( res.attributes.colors, 3 ).onUpload( disposeArray ) );
+
+				let vs = rust.get_vertices( self.buffer );
+
+				self.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vs.vertices, 3 ).onUpload( disposeArray ) );
 				
 			});
 
@@ -332,9 +347,6 @@ export default {
 			var material = new THREE.MeshLambertMaterial();
 			material.vertexColors = true;
 
-			this.geometry.setIndex( this.indices );
-			this.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( this.vertices, 3 ) );
-			this.geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( this.colors, 3 ) );
 			this.geometry.computeBoundingSphere();
 
 			// TODO: normalise vertices before loading into buffer?
