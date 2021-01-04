@@ -22,6 +22,8 @@ import 'regenerator-runtime/runtime';
 import rust from '../crate/Cargo.toml';
 rust.init();
 
+const filePath = "3db2.json"
+
 export default {
 	name: 'ThreeJsViewer',
 	props: {
@@ -161,11 +163,11 @@ export default {
 			// Already render before streaming has finished, so that the background is shown in the meantime.
 			this.renderer.render( this.scene, this.camera );
 
-			await fetch("3db2.json")
-			.then(r => r.arrayBuffer())
-			.then(function(buf) {
+			await fetch( filePath )
+			.then( r => r.arrayBuffer() )
+			.then( function( buf ) {
 
-				var arr = new Uint8Array(buf);
+				var arr = new Uint8Array( buf );
 
 				// See https://github.com/rustwasm/wasm-bindgen/issues/1079, https://github.com/rustwasm/wasm-bindgen/issues/1643
 				// Code has been sourced from there.
@@ -174,10 +176,10 @@ export default {
 				array.set( arr )
 				})
 
-				return rust.receive_buf(self.buffer);
+				return rust.receive_buf( self.buffer );
 
 			})
-			.then( function(res) {
+			.then( function( res ) {
 
 				self.indices = res.attributes.triangles;
 				self.vertices = res.vertices.flat();
