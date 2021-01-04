@@ -1,4 +1,3 @@
-#![allow(warnings)]
 #[macro_use]
 
 extern crate cfg_if;
@@ -11,18 +10,7 @@ extern crate serde_wasm_bindgen;
 extern crate phf;
 extern crate lazy_static;
 
-use lazy_static::lazy_static;
-use std::sync::Mutex;
-use phf::{phf_map, phf_set};
 use wasm_bindgen::prelude::*;
-use serde::{Serialize, Deserialize, Deserializer};
-use serde::de::{self, Visitor, MapAccess};
-use serde_json::{Value, json};
-use std::{cmp, fmt};
-use std::marker::PhantomData;
-use std::collections::HashMap;
-use std::io;
-use std::fmt::Display;
 
 
 ///// Boilerplate code, from https://github.com/rustwasm/rust-parcel-template and I think the wasm-pack-template /////
@@ -57,8 +45,8 @@ macro_rules! log {
     }
 }
 
+// Only import module after macros have been defined
 mod cityjson;
-// use crate::cityjson::*;
 
 // Called by our JS entry point to run the example
 #[wasm_bindgen]
@@ -70,8 +58,6 @@ pub fn init() -> Result<(), JsValue> {
 
     Ok(())
 }
-
-
 
 
 
