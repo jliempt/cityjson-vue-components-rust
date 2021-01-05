@@ -195,7 +195,7 @@ export default {
 
 				self.geometry.setIndex( res.attributes.triangles );
 
-				self.geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( res.attributes.colors, 3 ).onUpload( disposeArray ) );
+				self.geometry.setAttribute( 'color', new THREE.Uint8BufferAttribute( res.attributes.colors, 3, true ).onUpload( disposeArray ) );
 
 				let vs = rust.get_vertices( self.buffer );
 

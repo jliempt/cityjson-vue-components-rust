@@ -9,29 +9,29 @@ use super::{WasmMemBuffer};
 
 
 // Global map with RGB values for all CityObject types
-static COLORS: phf::Map<&'static str, &'static [f32; 3]> = phf_map! {
+static COLORS: phf::Map<&'static str, &'static [u8; 3]> = phf_map! {
 
-    "Building"                      => &[ 0.45, 0.59, 0.87 ],
-    "BuildingPart"                  => &[ 0.45, 0.59, 0.87 ],
-    "BuildingInstallation"          => &[ 0.45, 0.59, 0.87 ],
-    "Bridge"                        => &[ 0.6, 0.6, 0.6 ],
-    "BridgePart"                    => &[ 0.6, 0.6, 0.6 ],
-    "BridgeInstallation"            => &[ 0.6, 0.6, 0.6 ],
-    "BridgeConstructionElement"     => &[ 0.6, 0.6, 0.6 ],
-    "CityObjectGroup"               => &[ 1.0, 1.0, 0.70 ],
-    "CityFurniture"                 => &[ 0.8, 0.0, 0.0 ],
-    "GenericCityObject"             => &[ 0.8, 0.0, 0.0 ],
-    "LandUse"                       => &[ 1.0, 1.0, 0.70 ],
-    "PlantCover"                    => &[ 0.22, 0.67, 0.22 ],
-    "Railway"                       => &[ 0.0, 0.0, 0.0 ],
-    "Road"                          => &[ 0.6, 0.6, 0.6 ],
-    "SolitaryVegetationObject"      => &[ 0.22, 0.67, 0.22 ],
-    "TINRelief"                     => &[ 1.0, 0.86, 0.6 ],
-    "TransportSquare"               => &[ 0.6, 0.6, 0.6 ],
-    "Tunnel"                        => &[ 0.6, 0.6, 0.6 ],
-    "TunnelPart"                    => &[ 0.6, 0.6, 0.6 ],
-    "TunnelInstallation"            => &[ 0.6, 0.6, 0.6 ],
-    "WaterBody"                     => &[ 0.3, 0.65, 1.0 ],
+    "Building"                      => &[ 115, 150, 222 ],
+    "BuildingPart"                  => &[ 115, 150, 222 ],
+    "BuildingInstallation"          => &[ 115, 150, 222 ],
+    "Bridge"                        => &[ 153, 153, 153 ],
+    "BridgePart"                    => &[ 153, 153, 153 ],
+    "BridgeInstallation"            => &[ 153, 153, 153 ],
+    "BridgeConstructionElement"     => &[ 153, 153, 153 ],
+    "CityObjectGroup"               => &[ 255, 255, 178 ],
+    "CityFurniture"                 => &[ 204, 0, 0 ],
+    "GenericCityObject"             => &[ 204, 0, 0 ],
+    "LandUse"                       => &[ 255, 255, 178 ],
+    "PlantCover"                    => &[ 56, 171, 56 ],
+    "Railway"                       => &[ 0, 0, 0 ],
+    "Road"                          => &[ 153, 153, 153 ],
+    "SolitaryVegetationObject"      => &[ 56, 153, 56 ],
+    "TINRelief"                     => &[ 255, 219, 153 ],
+    "TransportSquare"               => &[ 153, 153, 153 ],
+    "Tunnel"                        => &[ 153, 153, 153 ],
+    "TunnelPart"                    => &[ 153, 153, 153 ],
+    "TunnelInstallation"            => &[ 153, 153, 153 ],
+    "WaterBody"                     => &[ 76, 166, 255 ],
 
 };
 
@@ -69,7 +69,7 @@ pub fn get_vertices(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 #[derive(Serialize, Deserialize)]
 struct BufferAttributes {
 
-    colors: Vec<f32>,
+    colors: Vec<u8>,
     triangles: Vec<u32>,
     vertices: Vec<u32>,
     ids: Vec<String>
@@ -114,7 +114,7 @@ where
 
             let mut i = 1;
 
-            let mut colors: Vec<f32> = Vec::new();
+            let mut colors: Vec<u8> = Vec::new();
             let mut triangles: Vec<u32> = Vec::new();
             let mut vertices: Vec<u32> = Vec::new();
             let mut ids: Vec<String> = Vec::new();
