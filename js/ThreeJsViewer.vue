@@ -22,7 +22,7 @@ import 'regenerator-runtime/runtime';
 import rust from '../crate/Cargo.toml';
 rust.init();
 
-const filePath = "45bz1.json"
+const filePath = "3db.json"
 
 export default {
 	name: 'ThreeJsViewer',
@@ -34,27 +34,27 @@ export default {
 			default: function () {
 
 				return {
-					"Building": 0x7497df,
-					"BuildingPart": 0x7497df,
-					"BuildingInstallation": 0x7497df,
-					"Bridge": 0x999999,
-					"BridgePart": 0x999999,
-					"BridgeInstallation": 0x999999,
-					"BridgeConstructionElement": 0x999999,
-					"CityObjectGroup": 0xffffb3,
-					"CityFurniture": 0xcc0000,
-					"GenericCityObject": 0xcc0000,
-					"LandUse": 0xffffb3,
-					"PlantCover": 0x39ac39,
-					"Railway": 0x000000,
-					"Road": 0x999999,
-					"SolitaryVegetationObject": 0x39ac39,
-					"TINRelief": 0xffdb99,
-					"TransportSquare": 0x999999,
-					"Tunnel": 0x999999,
-					"TunnelPart": 0x999999,
-					"TunnelInstallation": 0x999999,
-					"WaterBody": 0x4da6ff
+					"Building"                       : [ 115, 150, 222 ],
+					"BuildingPart"                   : [ 115, 150, 222 ],
+					"BuildingInstallation"           : [ 115, 150, 222 ],
+					"Bridge"                         : [ 153, 153, 153 ],
+					"BridgePart"                     : [ 153, 153, 153 ],
+					"BridgeInstallation"             : [ 153, 153, 153 ],
+					"BridgeConstructionElement"      : [ 153, 153, 153 ],
+					"CityObjectGroup"                : [ 255, 255, 178 ],
+					"CityFurniture"                  : [ 204, 0, 0 ],
+					"GenericCityObject"              : [ 204, 0, 0 ],
+					"LandUse"                        : [ 255, 255, 178 ],
+					"PlantCover"                     : [ 56, 171, 56 ],
+					"Railway"                        : [ 0, 0, 0 ],
+					"Road"                           : [ 153, 153, 153 ],
+					"SolitaryVegetationObject"       : [ 56, 153, 56 ],
+					"TINRelief"                      : [ 255, 219, 153 ],
+					"TransportSquare"                : [ 153, 153, 153 ],
+					"Tunnel"                         : [ 153, 153, 153 ],
+					"TunnelPart"                     : [ 153, 153, 153 ],
+					"TunnelInstallation"             : [ 153, 153, 153 ],
+					"WaterBody"                      : [ 76, 166, 255 ]
 				};
 
 			}
@@ -99,27 +99,18 @@ export default {
 
 		selected_objid: function ( newID, oldID ) {
 
-			if ( oldID != null && oldID in this.citymodel.CityObjects ) {
+			var split = newID.split(" ");
+			var newID = { id: split[ 0 ], start: split[ 1 ], end: split[ 2 ] }
 
-				var coType = this.citymodel.CityObjects[ oldID ].type;
-				var color = new THREE.Color( this.object_colors[ coType ] );
 
-				// this.updateCOColor( color, oldID );
+			if ( oldID != null ) {
 
-			}
-
-			if ( newID != null ) {
-
-				color = new THREE.Color( 0xdda500 );
-
-				var attr = rust.get_attributes( this.buffer, newID );
-				console.log( attr );
-
-				// this.updateCOColor( color, newID );
+				split = oldID.split(" ");
+				oldID = { id: split[ 0 ], start: split[ 1 ], end: split[ 2 ] };
 
 			}
 
-			this.renderer.render( this.scene, this.camera );
+			this.select_co( newID, oldID );
 
 		}
 
@@ -147,6 +138,8 @@ export default {
 		this.verticesLength = 0;
 		this.targetProxy;
 		this.buffer;
+		this.intervals;
+		this.selectedCOColor;
 
 	},
 
@@ -181,25 +174,11 @@ export default {
 			})
 			.then( function( res ) {
 
-				// self.indices = res.attributes.triangles;
-				//self.vertices = res.attributes.vertices;
-				// self.colors = res.attributes.colors;
-
-					function disposeArray() {
-
-					this.array = null;
-
-				}
-
-				self.faceIDs = res.attributes.ids;
-
 				self.geometry.setIndex( res.attributes.triangles );
-
-				self.geometry.setAttribute( 'color', new THREE.Uint8BufferAttribute( res.attributes.colors, 3, true ).onUpload( disposeArray ) );
-
+				self.geometry.setAttribute( 'color', new THREE.Uint8BufferAttribute( res.attributes.colors, 3, true ) );
+				
 				let vs = rust.get_vertices( self.buffer );
-
-				self.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vs.vertices, 3 ).onUpload( disposeArray ) );
+				self.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vs.vertices, 3 ) );
 				
 			});
 
@@ -224,6 +203,34 @@ export default {
 
 	methods: {
 
+		select_co( newID, oldID ) {
+
+			var attr = rust.get_attributes( this.buffer, newID.id );
+			console.log(attr);
+
+			var color;
+
+			if ( oldID != null ) {
+
+				color = this.selectedCOColor;
+				this.updateCOColor( color, oldID );
+
+			}
+
+			if ( newID != null ) {
+
+			let coType = attr.type;
+			color = [ 255, 255, 255 ];
+			this.selectedCOColor = this.object_colors[ coType ];
+
+			this.updateCOColor( color, newID );
+
+			}
+
+			this.renderer.render( this.scene, this.camera );
+
+		},
+
 		findIDFaces( coId ) {
 
 
@@ -232,7 +239,10 @@ export default {
 
 		updateCOColor( color, coID ) {
 
+			let firstFaceID = coID.start;
+			let lastFaceID = coID.end;
 
+			//console.log(firstFaceID, lastFaceID, color);
 
 			for ( var i = firstFaceID; i <= lastFaceID; i ++ ) {
 
@@ -242,11 +252,13 @@ export default {
 				vertices.push( this.mesh.geometry.index.array[ i * 3 + 1 ] );
 				vertices.push( this.mesh.geometry.index.array[ i * 3 + 2 ] );
 
+				// console.log(vertices);
+
 				for ( var v = 0; v < vertices.length; v ++ ) {
 
-					this.mesh.geometry.attributes.color.array[ vertices[ v ] * 3 ] = color.r;
-					this.mesh.geometry.attributes.color.array[ vertices[ v ] * 3 + 1 ] = color.g;
-					this.mesh.geometry.attributes.color.array[ vertices[ v ] * 3 + 2 ] = color.b;
+					this.mesh.geometry.attributes.color.array[ vertices[ v ] * 3 ] = color[0];
+					this.mesh.geometry.attributes.color.array[ vertices[ v ] * 3 + 1 ] = color[1];
+					this.mesh.geometry.attributes.color.array[ vertices[ v ] * 3 + 2 ] = color[2];
 
 				}
 
@@ -273,7 +285,10 @@ export default {
 
 			}
 
-			var cityObjId = this.faceIDs[ intersects[ 0 ].faceIndex ];
+			console.log( intersects[ 0 ].faceIndex );
+			var cityObjId = rust.get_interval_and_id( intersects[ 0 ].faceIndex );
+			console.log(cityObjId);
+
 			this.$emit( 'object_clicked', cityObjId );
 
 		},
