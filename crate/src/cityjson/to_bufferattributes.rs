@@ -5,6 +5,8 @@ use serde::de::{self, Visitor, MapAccess, DeserializeSeed, SeqAccess};
 use serde_json::{Value, json};
 use std::fmt;
 use std::marker::PhantomData;
+use lazy_static::lazy_static;
+use std::sync::Mutex;
 use super::{WasmMemBuffer};
 
 
@@ -35,6 +37,14 @@ static COLORS: phf::Map<&'static str, &'static [u8; 3]> = phf_map! {
 
 };
 
+lazy_static! {
+    pub static ref IDS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+}
+
+lazy_static! {
+    pub static ref INTERVALS: Mutex<Vec<u32>> = Mutex::new(vec![0]);
+}
+
 #[wasm_bindgen]
 pub fn receive_buf(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
@@ -46,7 +56,7 @@ pub fn receive_buf(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
     // out.attributes.vertices = vertices.vertices;
 
-    log!("Rust: CityObjects and vertices parsed");
+    log!("Rust: CityObjects parsed");
 
     // Parse into JsValue to be able to return it to JS
     serde_wasm_bindgen::to_value(&out).expect("Could not convert serde_json::Value into JsValue")
@@ -58,7 +68,7 @@ pub fn get_vertices(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
     let vertices: Vertices = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
     
-    log!("Vertices parsed");
+    log!("Rust: vertices parsed");
     
     serde_wasm_bindgen::to_value(&vertices).expect("Could not convert serde_json::Value into JsValue")
 
@@ -72,8 +82,7 @@ struct BufferAttributes {
     colors: Vec<u8>,
     triangles: Vec<u32>,
     vertices: Vec<u32>,
-    ids: Vec<String>
-    
+
 }
 
 #[derive(Serialize, Deserialize)]
@@ -117,18 +126,26 @@ where
             let mut colors: Vec<u8> = Vec::new();
             let mut triangles: Vec<u32> = Vec::new();
             let mut vertices: Vec<u32> = Vec::new();
-            let mut ids: Vec<String> = Vec::new();
         
             let mut ba = BufferAttributes {
                 colors: colors,
                 triangles: triangles,
                 vertices: vertices,
-                ids: ids
             };
 
             while let Some( ( key, value ) ) = map.next_entry::<String, serde_json::Value>()? {
 
+                let mut ids = IDS.lock().unwrap();
+                let mut intervals = INTERVALS.lock().unwrap();
+
                 parse_cityobject( &key, &value, &mut ba );
+
+                if *intervals.last().unwrap() != ba.triangles.len() as u32 {
+
+                    ids.push( key.to_string() );
+                    intervals.push( ba.triangles.len() as u32 );
+
+                }
 
                 if i % 1000 == 0 {
                     log!("{} CityObjects parsed", i);
@@ -137,7 +154,6 @@ where
                 i += 1;
 
             }
-
             Ok( ba )
 
 
@@ -225,19 +241,36 @@ fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes, co_ty
 
         if boundary_n == 3 {
 
-            let v0: u32 = boundaries[b_i][0][0].as_i64().unwrap() as u32;
-            let v1: u32 = boundaries[b_i][0][1].as_i64().unwrap() as u32;
-            let v2: u32 = boundaries[b_i][0][2].as_i64().unwrap() as u32;
+            let vs = [  boundaries[b_i][0][0].as_i64().unwrap() as u32,
+                        boundaries[b_i][0][1].as_i64().unwrap() as u32,
+                        boundaries[b_i][0][2].as_i64().unwrap() as u32 ];
 
-            ba.triangles.push( v0 );
-            ba.triangles.push( v1 );
-            ba.triangles.push( v2 );
+            ba.triangles.push( vs[ 0 ] );
+            ba.triangles.push( vs[ 1 ] );
+            ba.triangles.push( vs[ 2 ] );
 
-            ba.colors.push( color[ 0 ] );
-            ba.colors.push( color[ 1 ] );
-            ba.colors.push( color[ 2 ] );
+            // Colors are stored per vertex, so they can't simply be pushed to the colors vector
+            for v in vs.iter() {
 
-            // a.ids.push( id.to_string() )
+                let v_color_index = ( v * 3 ) as usize;
+
+                let color_n = ba.colors.len();
+
+                if color_n <= v_color_index {
+
+                    for j in color_n..( v_color_index + 3 ) {
+
+                        ba.colors.push( 0 );
+
+                    }
+
+                }
+
+                ba.colors[ v_color_index ] = color[ 0 ];
+                ba.colors[ v_color_index + 1 ] = color[ 1 ];
+                ba.colors[ v_color_index + 2] = color[ 2 ];
+
+            }
 
         }
         
