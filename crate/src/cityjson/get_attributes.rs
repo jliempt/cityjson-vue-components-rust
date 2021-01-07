@@ -5,7 +5,9 @@ use serde::{Serialize, Deserialize, Deserializer};
 use serde::de::{self, Visitor, MapAccess};
 use serde_json::{Value, json};
 use std::fmt;
+
 use super::{WasmMemBuffer};
+use super::to_bufferattributes;
 
 
 #[derive(Serialize, Deserialize)]
@@ -86,6 +88,8 @@ where
 #[wasm_bindgen]
 pub fn get_attributes( buf: &WasmMemBuffer, selected_id: String ) -> wasm_bindgen::JsValue {
 
+    log!("Getting attributes of {}...", selected_id);
+
     // Lock the global variable so that other processes can't access it, and take its value.
     let mut co_id = CO_ID.lock().unwrap();
 
@@ -99,5 +103,62 @@ pub fn get_attributes( buf: &WasmMemBuffer, selected_id: String ) -> wasm_bindge
     let out: CityObject = serde_json::from_slice(&buf.buffer).expect("Error getting attributes");
 
     JsValue::from_serde(&out.attributes).expect("Could not convert serde_json::Value into JsValue (attributes)")
+
+}
+
+#[wasm_bindgen]
+pub fn get_interval_and_id( query: u32 ) -> wasm_bindgen::JsValue {
+
+    log!("Getting CityObject ID and triangle interval from clicked triangle index...");
+
+    let intervals = &to_bufferattributes::INTERVALS.lock().unwrap();
+    let ids = &to_bufferattributes::IDS.lock().unwrap();
+
+    let mut position = intervals.len() / 2;
+    let mut step = position / 2;
+
+    loop {
+        
+        if step == 0 {
+
+            if query >= intervals[ position ] && query < intervals[ position + 1 ] {
+
+                let res = format!("{} {} {}", &ids[ position ], intervals[ position ], intervals[ position + 1 ] - 1 );
+
+                return wasm_bindgen::JsValue::from_str( &res );
+
+            }
+
+            log!("ID corresponding to triangle index not found!");
+            return wasm_bindgen::JsValue::from_str("");
+
+        } else if query >= intervals[ position + 1 ] {
+
+            position += step;
+
+        } else if query < intervals[ position ] {
+
+            position -= step;
+
+        } else {
+
+            let res = format!("{} {} {}", &ids[ position ], intervals[ position ], intervals[ position + 1 ] - 1 );
+
+            return wasm_bindgen::JsValue::from_str( &res );
+
+        }
+
+        // Ceil division to make sure step does not get too low, but if it was 1 it needs to be floored, otherwise it will be 1 forever
+        if step == 1 {
+
+            step = 0;
+
+        } else {
+
+            step = (step as f32 / 2.0).ceil() as usize;
+
+        }
+
+    }
 
 }
