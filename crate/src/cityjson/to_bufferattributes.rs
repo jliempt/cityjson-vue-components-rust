@@ -7,35 +7,9 @@ use std::fmt;
 use std::marker::PhantomData;
 use lazy_static::lazy_static;
 use std::sync::Mutex;
+use std::ops::{Index, IndexMut};
+use std::collections::HashMap;
 use super::{WasmMemBuffer};
-
-
-// Global map with RGB values for all CityObject types
-static COLORS: phf::Map<&'static str, &'static [u8; 3]> = phf_map! {
-
-    "Building"                      => &[ 115, 150, 222 ],
-    "BuildingPart"                  => &[ 115, 150, 222 ],
-    "BuildingInstallation"          => &[ 115, 150, 222 ],
-    "Bridge"                        => &[ 153, 153, 153 ],
-    "BridgePart"                    => &[ 153, 153, 153 ],
-    "BridgeInstallation"            => &[ 153, 153, 153 ],
-    "BridgeConstructionElement"     => &[ 153, 153, 153 ],
-    "CityObjectGroup"               => &[ 255, 255, 178 ],
-    "CityFurniture"                 => &[ 204, 0, 0 ],
-    "GenericCityObject"             => &[ 204, 0, 0 ],
-    "LandUse"                       => &[ 255, 255, 178 ],
-    "PlantCover"                    => &[ 56, 171, 56 ],
-    "Railway"                       => &[ 0, 0, 0 ],
-    "Road"                          => &[ 153, 153, 153 ],
-    "SolitaryVegetationObject"      => &[ 56, 153, 56 ],
-    "TINRelief"                     => &[ 255, 219, 153 ],
-    "TransportSquare"               => &[ 153, 153, 153 ],
-    "Tunnel"                        => &[ 153, 153, 153 ],
-    "TunnelPart"                    => &[ 153, 153, 153 ],
-    "TunnelInstallation"            => &[ 153, 153, 153 ],
-    "WaterBody"                     => &[ 76, 166, 255 ],
-
-};
 
 lazy_static! {
     pub static ref IDS: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -45,21 +19,19 @@ lazy_static! {
     pub static ref INTERVALS: Mutex<Vec<u32>> = Mutex::new(vec![0]);
 }
 
+
 #[wasm_bindgen]
 pub fn receive_buf(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
     log!("Rust: ArrayBuffer received");
 
     // Take the buffer and deserialize it into a CityJSONAttributes
-    let mut out: CityJSONAttributes = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
-    // let vertices: Vertices = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
-
-    // out.attributes.vertices = vertices.vertices;
+    let mut res: CityJSONAttributes = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
 
     log!("Rust: CityObjects parsed");
 
     // Parse into JsValue to be able to return it to JS
-    serde_wasm_bindgen::to_value(&out).expect("Could not convert serde_json::Value into JsValue")
+    wasm_bindgen::JsValue::from_serde( &res ).expect("Could not convert serde_json::Value into JsValue")
 
 }
 
@@ -76,13 +48,180 @@ pub fn get_vertices(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
 ///// Serde (JSON) streaming code, adapted from https://serde.rs/stream-array.html, https://serde.rs/deserialize-map.html, and https://serde.rs/deserialize-struct.html /////
 
-#[derive(Serialize, Deserialize)]
-struct BufferAttributes {
+// Default enables easy initialization (with CityObjects { ..Default::default() }; )
+#[derive(Serialize, Deserialize, Default)]
+struct CityObjects {
 
-    colors: Vec<u8>,
-    triangles: Vec<u32>,
-    vertices: Vec<u32>,
+    Building: Vec<u32>,
+    BuildingPart: Vec<u32>,
+    BuildingInstallation: Vec<u32>,
+    Bridge: Vec<u32>,
+    BridgePart: Vec<u32>,
+    BridgeInstallation: Vec<u32>,
+    BridgeConstructionElement: Vec<u32>,
+    CityObjectGroup: Vec<u32>,
+    CityFurniture: Vec<u32>,
+    GenericCityObject: Vec<u32>,
+    LandUse: Vec<u32>,
+    PlantCover: Vec<u32>,
+    Railway: Vec<u32>,
+    Road: Vec<u32>,
+    SolitaryVegetationObject: Vec<u32>,
+    TINRelief: Vec<u32>,
+    TransportSquare: Vec<u32>,
+    Tunnel: Vec<u32>,
+    TunnelPart: Vec<u32>,
+    TunnelInstallation: Vec<u32>,
+    WaterBody: Vec<u32>,
 
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct CityObjectsIDs {
+
+    Building: Vec<String>,
+    BuildingPart: Vec<String>,
+    BuildingInstallation: Vec<String>,
+    Bridge: Vec<String>,
+    BridgePart: Vec<String>,
+    BridgeInstallation: Vec<String>,
+    BridgeConstructionElement: Vec<String>,
+    CityObjectGroup: Vec<String>,
+    CityFurniture: Vec<String>,
+    GenericCityObject: Vec<String>,
+    LandUse: Vec<String>,
+    PlantCover: Vec<String>,
+    Railway: Vec<String>,
+    Road: Vec<String>,
+    SolitaryVegetationObject: Vec<String>,
+    TINRelief: Vec<String>,
+    TransportSquare: Vec<String>,
+    Tunnel: Vec<String>,
+    TunnelPart: Vec<String>,
+    TunnelInstallation: Vec<String>,
+    WaterBody: Vec<String>,
+
+}
+
+
+impl Index<&'_ str> for CityObjects {
+    type Output = Vec<u32>;
+    fn index(&self, s: &str) -> &Vec<u32> {
+        match s {
+            "Building" => &self.Building,
+            "BuildingPart" => &self.BuildingPart,
+            "BuildingInstallation" => &self.BuildingInstallation,
+            "Bridge" => &self.Bridge,
+            "BridgePart" => &self.BridgePart,
+            "BridgeInstallation" => &self.BridgeInstallation,
+            "BridgeConstructionElement" => &self.BridgeConstructionElement,
+            "CityObjectGroup" => &self.CityObjectGroup,
+            "CityFurniture" => &self.CityFurniture,
+            "GenericCityObject" => &self.GenericCityObject,
+            "LandUse" => &self.LandUse,
+            "PlantCover" => &self.PlantCover,
+            "Railway" => &self.Railway,
+            "Road" => &self.Road,
+            "SolitaryVegetationObject" => &self.SolitaryVegetationObject,
+            "TINRelief" => &self.TINRelief,
+            "TransportSquare" => &self.TransportSquare,
+            "Tunnel" => &self.Tunnel,
+            "TunnelPart" => &self.TunnelPart,
+            "TunnelInstallation" => &self.TunnelInstallation,
+            "WaterBody" => &self.WaterBody,
+            _ => panic!("unknown field: {}", s),
+        }
+    }
+}
+
+impl IndexMut<&'_ str> for CityObjects {
+
+    fn index_mut(&mut self, s: &str) -> &mut Vec<u32> {
+        match s {
+            "Building" => &mut self.Building,
+            "BuildingPart" => &mut self.BuildingPart,
+            "BuildingInstallation" => &mut self.BuildingInstallation,
+            "Bridge" => &mut self.Bridge,
+            "BridgePart" => &mut self.BridgePart,
+            "BridgeInstallation" => &mut self.BridgeInstallation,
+            "BridgeConstructionElement" => &mut self.BridgeConstructionElement,
+            "CityObjectGroup" => &mut self.CityObjectGroup,
+            "CityFurniture" => &mut self.CityFurniture,
+            "GenericCityObject" => &mut self.GenericCityObject,
+            "LandUse" => &mut self.LandUse,
+            "PlantCover" => &mut self.PlantCover,
+            "Railway" => &mut self.Railway,
+            "Road" => &mut self.Road,
+            "SolitaryVegetationObject" => &mut self.SolitaryVegetationObject,
+            "TINRelief" => &mut self.TINRelief,
+            "TransportSquare" => &mut self.TransportSquare,
+            "Tunnel" => &mut self.Tunnel,
+            "TunnelPart" => &mut self.TunnelPart,
+            "TunnelInstallation" => &mut self.TunnelInstallation,
+            "WaterBody" => &mut self.WaterBody,
+            _ => panic!("unknown field: {}", s),
+        }
+    }
+}
+
+impl Index<&'_ str> for CityObjectsIDs {
+    type Output = Vec<String>;
+    fn index(&self, s: &str) -> &Vec<String> {
+        match s {
+            "Building" => &self.Building,
+            "BuildingPart" => &self.BuildingPart,
+            "BuildingInstallation" => &self.BuildingInstallation,
+            "Bridge" => &self.Bridge,
+            "BridgePart" => &self.BridgePart,
+            "BridgeInstallation" => &self.BridgeInstallation,
+            "BridgeConstructionElement" => &self.BridgeConstructionElement,
+            "CityObjectGroup" => &self.CityObjectGroup,
+            "CityFurniture" => &self.CityFurniture,
+            "GenericCityObject" => &self.GenericCityObject,
+            "LandUse" => &self.LandUse,
+            "PlantCover" => &self.PlantCover,
+            "Railway" => &self.Railway,
+            "Road" => &self.Road,
+            "SolitaryVegetationObject" => &self.SolitaryVegetationObject,
+            "TINRelief" => &self.TINRelief,
+            "TransportSquare" => &self.TransportSquare,
+            "Tunnel" => &self.Tunnel,
+            "TunnelPart" => &self.TunnelPart,
+            "TunnelInstallation" => &self.TunnelInstallation,
+            "WaterBody" => &self.WaterBody,
+            _ => panic!("unknown field: {}", s),
+        }
+    }
+}
+
+impl IndexMut<&'_ str> for CityObjectsIDs {
+
+    fn index_mut(&mut self, s: &str) -> &mut Vec<String> {
+        match s {
+            "Building" => &mut self.Building,
+            "BuildingPart" => &mut self.BuildingPart,
+            "BuildingInstallation" => &mut self.BuildingInstallation,
+            "Bridge" => &mut self.Bridge,
+            "BridgePart" => &mut self.BridgePart,
+            "BridgeInstallation" => &mut self.BridgeInstallation,
+            "BridgeConstructionElement" => &mut self.BridgeConstructionElement,
+            "CityObjectGroup" => &mut self.CityObjectGroup,
+            "CityFurniture" => &mut self.CityFurniture,
+            "GenericCityObject" => &mut self.GenericCityObject,
+            "LandUse" => &mut self.LandUse,
+            "PlantCover" => &mut self.PlantCover,
+            "Railway" => &mut self.Railway,
+            "Road" => &mut self.Road,
+            "SolitaryVegetationObject" => &mut self.SolitaryVegetationObject,
+            "TINRelief" => &mut self.TINRelief,
+            "TransportSquare" => &mut self.TransportSquare,
+            "Tunnel" => &mut self.Tunnel,
+            "TunnelPart" => &mut self.TunnelPart,
+            "TunnelInstallation" => &mut self.TunnelInstallation,
+            "WaterBody" => &mut self.WaterBody,
+            _ => panic!("unknown field: {}", s),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -91,12 +230,12 @@ struct CityJSONAttributes {
     // Iterate over CityObjects and parse them into BufferAttributes
     #[serde(deserialize_with = "deserialize_cityobjects")]
     #[serde(rename(deserialize = "CityObjects"))]
-    attributes: BufferAttributes,
+    triangles: serde_json::Value
 
 }
 
 /// Deserialize the CityObjects into vectors that can be used for Three.js BufferAttributes
-fn deserialize_cityobjects<'de, D>(deserializer: D) -> Result<BufferAttributes, D::Error>
+fn deserialize_cityobjects<'de, D>(deserializer: D) -> Result<serde_json::Value, D::Error>
 where
 
     D: Deserializer<'de>,
@@ -108,7 +247,7 @@ where
     impl<'de> Visitor<'de> for COVisitor
     {
         /// Return type of this visitor
-        type Value = BufferAttributes;
+        type Value = serde_json::Value;
 
         // Error message if data that is not of this type is encountered while deserializing
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -116,36 +255,39 @@ where
         }
 
         // Traverse CityObjects
-        fn visit_map<S>(self, mut map: S) -> Result<BufferAttributes, S::Error>
+        fn visit_map<S>(self, mut map: S) -> Result<serde_json::Value, S::Error>
         where
             S: MapAccess<'de>,
         {
 
             let mut i = 1;
-
-            let mut colors: Vec<u8> = Vec::new();
-            let mut triangles: Vec<u32> = Vec::new();
-            let mut vertices: Vec<u32> = Vec::new();
         
-            let mut ba = BufferAttributes {
-                colors: colors,
-                triangles: triangles,
-                vertices: vertices,
-            };
+            let mut triangle_groups = CityObjects { ..Default::default() };
+            let mut interval_groups = CityObjects { ..Default::default() };
+            let mut id_groups = CityObjectsIDs { ..Default::default() };
+
+            let co_types = ["Building", "BuildingPart", "BuildingInstallation", "Bridge", "BridgePart", "BridgeInstallation", "BridgeConstructionElement", "CityObjectGroup", "CityFurniture", "GenericCityObject", "LandUse", "PlantCover", "Railway", "Road", "SolitaryVegetationObject", "TINRelief", "TransportSquare", "Tunnel", "TunnelPart", "TunnelInstallation", "WaterBody"];
 
             while let Some( ( key, value ) ) = map.next_entry::<String, serde_json::Value>()? {
 
-                let mut ids = IDS.lock().unwrap();
-                let mut intervals = INTERVALS.lock().unwrap();
+                parse_cityobject( &key, &value, &mut triangle_groups );
 
-                parse_cityobject( &key, &value, &mut ba );
+                let co_type: &str = value[ "type" ].as_str().expect( "CityObject has no valid type" );
 
-                if *intervals.last().unwrap() != ba.triangles.len() as u32 {
+                let triangles_len = triangle_groups[ co_type ].len() as u32;
 
-                    ids.push( key.to_string() );
-                    intervals.push( ba.triangles.len() as u32 );
+                // What happens if a CityObject did not have geometry? Maybe do something like this (but check if .last() == None)
+                // if *interval_groups[ co_type ].last().unwrap() != triangles_len
+
+                if co_type == "Building" {
+
+                    log!("{}, {}, {}", co_type, triangles_len, key);
 
                 }
+
+                interval_groups[ co_type ].push( triangles_len / 3 );
+                
+                id_groups[ co_type ].push( key.to_string() );
 
                 if i % 1000 == 0 {
                     log!("{} CityObjects parsed", i);
@@ -154,7 +296,43 @@ where
                 i += 1;
 
             }
-            Ok( ba )
+
+            let mut triangles: Vec<u32> = Vec::new();
+            let mut groups: HashMap<String, Vec<u32>> = HashMap::new();
+
+            let mut ids = IDS.lock().unwrap();
+            let mut intervals = INTERVALS.lock().unwrap();
+
+            for co_type in &co_types {
+
+                if triangle_groups[ &co_type.to_string() ].len() > 0 {
+
+                    let start = triangles.len();
+
+                    triangles.append( &mut triangle_groups[ &co_type.to_string() ] );
+
+                    let count = triangles.len() - start;
+
+                    groups.insert( co_type.to_string(), vec!(start as u32, count as u32) );
+
+                    ids.append( &mut id_groups[ co_type ] );
+
+                    // let group_intervals = *interval_groups[ co_type ].into_iter().map( |x| x + start as u32 ).collect();
+
+                    interval_groups[ co_type ].iter_mut().for_each(|x| *x += (start as u32) );
+
+                    intervals.append( &mut interval_groups[ co_type ] );
+
+                }
+
+            };
+
+            log!("{:?}", intervals);
+            log!("{:?}", ids);
+
+            let res = json!( { "triangles": triangles, "groups": groups } );
+
+            Ok( res )
 
 
         }
@@ -168,7 +346,7 @@ where
 
 }
 
-fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttributes ) {
+fn parse_cityobject( id: &String, co: &serde_json::Value, triangles: &mut CityObjects ) {
 
     let co_type: &str = co["type"].as_str().expect("CityObject has no valid type");
 
@@ -197,14 +375,14 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttribu
 
             for b_i in 0..boundaries_n {
 
-                parse_shell( &boundaries[b_i], ba, co_type, id );
+                parse_shell( &boundaries[b_i], triangles, co_type, id );
 
             }
 
         }
         else if geom_type == "MultiSurface" || geom_type == "CompositeSurface" {
 
-            parse_shell( &boundaries, ba, co_type, id );
+            parse_shell( &boundaries, triangles, co_type, id );
 
         }
         else if geom_type == "MultiSolid" || geom_type == "CompositeSolid" {
@@ -215,7 +393,7 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttribu
 
                 for b_j in 0..boundaries_inner_n {
 
-                    parse_shell( &boundaries[b_i][b_j], ba, co_type, id );
+                    parse_shell( &boundaries[b_i][b_j], triangles, co_type, id );
 
                 }
 
@@ -227,11 +405,9 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, ba: &mut BufferAttribu
 
 }
 
-fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes, co_type: &str, id: &str ){
+fn parse_shell( boundaries: &serde_json::Value, triangles: &mut CityObjects, co_type: &str, id: &str ){
 
     let boundaries_n = boundaries.as_array().unwrap().len();
-
-    let color = COLORS.get( co_type ).unwrap();
 
     for b_i in 0..boundaries_n {
 
@@ -245,32 +421,9 @@ fn parse_shell( boundaries: &serde_json::Value, ba: &mut BufferAttributes, co_ty
                         boundaries[b_i][0][1].as_i64().unwrap() as u32,
                         boundaries[b_i][0][2].as_i64().unwrap() as u32 ];
 
-            ba.triangles.push( vs[ 0 ] );
-            ba.triangles.push( vs[ 1 ] );
-            ba.triangles.push( vs[ 2 ] );
-
-            // Colors are stored per vertex, so they can't simply be pushed to the colors vector
-            for v in vs.iter() {
-
-                let v_color_index = ( v * 3 ) as usize;
-
-                let color_n = ba.colors.len();
-
-                if color_n <= v_color_index {
-
-                    for j in color_n..( v_color_index + 3 ) {
-
-                        ba.colors.push( 0 );
-
-                    }
-
-                }
-
-                ba.colors[ v_color_index ] = color[ 0 ];
-                ba.colors[ v_color_index + 1 ] = color[ 1 ];
-                ba.colors[ v_color_index + 2] = color[ 2 ];
-
-            }
+            triangles[ co_type ].push( vs[ 0 ] );
+            triangles[ co_type ].push( vs[ 1 ] );
+            triangles[ co_type ].push( vs[ 2 ] );
 
         }
         

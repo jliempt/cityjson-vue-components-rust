@@ -22,7 +22,7 @@ import 'regenerator-runtime/runtime';
 import rust from '../crate/Cargo.toml';
 rust.init();
 
-const filePath = "3db.json"
+const filePath = "3db_sub.json"
 
 export default {
 	name: 'ThreeJsViewer',
@@ -33,28 +33,28 @@ export default {
 			type: Object,
 			default: function () {
 
-				return {
-					"Building"                       : [ 115, 150, 222 ],
-					"BuildingPart"                   : [ 115, 150, 222 ],
-					"BuildingInstallation"           : [ 115, 150, 222 ],
-					"Bridge"                         : [ 153, 153, 153 ],
-					"BridgePart"                     : [ 153, 153, 153 ],
-					"BridgeInstallation"             : [ 153, 153, 153 ],
-					"BridgeConstructionElement"      : [ 153, 153, 153 ],
-					"CityObjectGroup"                : [ 255, 255, 178 ],
-					"CityFurniture"                  : [ 204, 0, 0 ],
-					"GenericCityObject"              : [ 204, 0, 0 ],
-					"LandUse"                        : [ 255, 255, 178 ],
-					"PlantCover"                     : [ 56, 171, 56 ],
-					"Railway"                        : [ 0, 0, 0 ],
-					"Road"                           : [ 153, 153, 153 ],
-					"SolitaryVegetationObject"       : [ 56, 153, 56 ],
-					"TINRelief"                      : [ 255, 219, 153 ],
-					"TransportSquare"                : [ 153, 153, 153 ],
-					"Tunnel"                         : [ 153, 153, 153 ],
-					"TunnelPart"                     : [ 153, 153, 153 ],
-					"TunnelInstallation"             : [ 153, 153, 153 ],
-					"WaterBody"                      : [ 76, 166, 255 ]
+			return {
+					"Building": 0x7497df,
+					"BuildingPart": 0x7497df,
+					"BuildingInstallation": 0x7497df,
+					"Bridge": 0x999999,
+					"BridgePart": 0x999999,
+					"BridgeInstallation": 0x999999,
+					"BridgeConstructionElement": 0x999999,
+					"CityObjectGroup": 0xffffb3,
+					"CityFurniture": 0xcc0000,
+					"GenericCityObject": 0xcc0000,
+					"LandUse": 0xffffb3,
+					"PlantCover": 0x39ac39,
+					"Railway": 0x000000,
+					"Road": 0x999999,
+					"SolitaryVegetationObject": 0x39ac39,
+					"TINRelief": 0xffdb99,
+					"TransportSquare": 0x999999,
+					"Tunnel": 0x999999,
+					"TunnelPart": 0x999999,
+					"TunnelInstallation": 0x999999,
+					"WaterBody": 0x4da6ff
 				};
 
 			}
@@ -174,16 +174,12 @@ export default {
 			})
 			.then( function( res ) {
 
-				self.geometry.setIndex( res.attributes.triangles );
-				self.geometry.setAttribute( 'color', new THREE.Uint8BufferAttribute( res.attributes.colors, 3, true ) );
-				
 				let vs = rust.get_vertices( self.buffer );
-				self.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vs.vertices, 3 ) );
-				
+
+				self.createGeometry(res.triangles, vs.vertices );
+
 			});
 
-			self.createGeometry();
-			self.renderer.render( self.scene, self.camera );
 
 			$( "#viewer" ).dblclick( function ( eventData ) {
 
@@ -213,7 +209,7 @@ export default {
 			if ( oldID != null ) {
 
 				color = this.selectedCOColor;
-				this.updateCOColor( color, oldID );
+				// this.updateCOColor( color, oldID );
 
 			}
 
@@ -223,7 +219,7 @@ export default {
 			color = [ 255, 255, 255 ];
 			this.selectedCOColor = this.object_colors[ coType ];
 
-			this.updateCOColor( color, newID );
+			// this.updateCOColor( color, newID );
 
 			}
 
@@ -357,14 +353,33 @@ export default {
 
 		},
 
-		async createGeometry() {
+		async createGeometry( triangles, vertices ) {
 
-			var material = new THREE.MeshLambertMaterial();
-			material.vertexColors = true;
+			// Set triangles and vertices
+			this.geometry.setIndex( triangles.triangles );
+			this.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
 
+			// Create geometry groups (for every CityObject type)
+			var materials = [];
+			for ( const [ coType, triangleIndices ] of Object.entries( triangles.groups ) ) {
+
+				var material = new THREE.MeshLambertMaterial();
+				material.color = new THREE.Color( this.object_colors[ coType ] );
+				materials.push( material );
+
+				// triangleIndices[ 0 ] = start index, triangleIndices[ 1 ] = triangle count
+				this.geometry.addGroup( triangleIndices[ 0 ], triangleIndices[ 1 ], materials.length - 1 )
+
+			}
+
+			this.mesh = new THREE.Mesh( this.geometry, materials );
+			this.mesh.castShadow = true;
+			this.mesh.receiveShadow = true;
+
+			// Normalize coordinates
+			// TODO: normalise vertices before loading into buffer?
 			this.geometry.computeBoundingSphere();
 
-			// TODO: normalise vertices before loading into buffer?
 			const center = this.geometry.boundingSphere.center;
 			const radius = this.geometry.boundingSphere.radius;
 
@@ -379,18 +394,11 @@ export default {
 			);
 
 			this.geometry.applyMatrix4( matrix );
-
 			this.geometry.computeVertexNormals();
-
-			console.log( this.geometry );
-
-			this.mesh = new THREE.Mesh( this.geometry, material );
-			this.mesh.castShadow = true;
-			this.mesh.receiveShadow = true;
 
 			this.scene.add( this.mesh );
 
-			// delete this.cmvertices;
+			this.renderer.render( this.scene, this.camera );
 
 		},
 
@@ -411,7 +419,7 @@ export default {
 			var vertices = [];
 
 			if ( ! ( cityObj.geometry &&
-        cityObj.geometry.length > 0 ) ) {
+        			cityObj.geometry.length > 0 ) ) {
 
 				return;
 
