@@ -154,6 +154,8 @@ export default {
 			})
 			.then( function( res ) {
 
+				console.log("JS: COs parsed");
+
 				// TODO: set vertices in another then
 				let vs = rust.get_vertices( self.buffer );
 
@@ -329,22 +331,30 @@ export default {
 
 		async createGeometry( triangles, vertices ) {
 
+			console.log(triangles.groups);
+
 			// Set triangles and vertices
 			this.geometry.setIndex( triangles.triangles );
 			this.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
 
 			// Create geometry groups (for every CityObject type)
 			var materials = [];
-			for ( const [ coType, triangleIndices ] of Object.entries( triangles.groups ) ) {
+			for ( const [ coType, triangleIndices ] of triangles.groups.entries() ) {
 
 				var material = new THREE.MeshLambertMaterial();
 				material.color = new THREE.Color( this.object_colors[ coType ] );
 				materials.push( material );
 
+				console.log(triangleIndices[ 0 ], triangleIndices[ 1 ]);
+
 				// triangleIndices[ 0 ] = start index, triangleIndices[ 1 ] = triangle count
 				this.geometry.addGroup( triangleIndices[ 0 ], triangleIndices[ 1 ], materials.length - 1 )
 
+
 			}
+
+			// var material = new THREE.MeshLambertMaterial();
+			// material.color = new THREE.Color( this.object_colors[ "Building" ] );
 
 			this.mesh = new THREE.Mesh( this.geometry, materials );
 			this.mesh.castShadow = true;
@@ -370,7 +380,11 @@ export default {
 			this.geometry.applyMatrix4( matrix );
 			this.geometry.computeVertexNormals();
 
+			// this.geometry.setDrawRange( 0, 100000 );
+
 			this.scene.add( this.mesh );
+
+			console.log("Geometry added to scene");
 
 			this.renderer.render( this.scene, this.camera );
 
