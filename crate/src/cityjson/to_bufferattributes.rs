@@ -31,12 +31,14 @@ pub fn receive_buf(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
     log!("Rust: CityObjects parsed");
 
     // Parse into JsValue to be able to return it to JS
-    wasm_bindgen::JsValue::from_serde( &res ).expect("Could not convert serde_json::Value into JsValue")
+    serde_wasm_bindgen::to_value( &res ).expect("Could not convert serde_json::Value into JsValue")
 
 }
 
 #[wasm_bindgen]
 pub fn get_vertices(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
+
+    log!("Rust: getting vertices");
 
     let vertices: Vertices = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
     
@@ -224,18 +226,26 @@ impl IndexMut<&'_ str> for CityObjectsIDs {
     }
 }
 
+#[derive(Serialize, Deserialize, Default)]
+struct TrianglesAndGroups {
+
+    triangles: Vec<u32>,
+    groups: HashMap<String, Vec<u32>>,
+
+}
+
 #[derive(Serialize, Deserialize)]
 struct CityJSONAttributes {
 
     // Iterate over CityObjects and parse them into BufferAttributes
     #[serde(deserialize_with = "deserialize_cityobjects")]
     #[serde(rename(deserialize = "CityObjects"))]
-    triangles: serde_json::Value
+    triangles: TrianglesAndGroups
 
 }
 
 /// Deserialize the CityObjects into vectors that can be used for Three.js BufferAttributes
-fn deserialize_cityobjects<'de, D>(deserializer: D) -> Result<serde_json::Value, D::Error>
+fn deserialize_cityobjects<'de, D>(deserializer: D) -> Result<TrianglesAndGroups, D::Error>
 where
 
     D: Deserializer<'de>,
@@ -247,7 +257,7 @@ where
     impl<'de> Visitor<'de> for COVisitor
     {
         /// Return type of this visitor
-        type Value = serde_json::Value;
+        type Value = TrianglesAndGroups;
 
         // Error message if data that is not of this type is encountered while deserializing
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -255,7 +265,7 @@ where
         }
 
         // Traverse CityObjects
-        fn visit_map<S>(self, mut map: S) -> Result<serde_json::Value, S::Error>
+        fn visit_map<S>(self, mut map: S) -> Result<TrianglesAndGroups, S::Error>
         where
             S: MapAccess<'de>,
         {
@@ -279,12 +289,6 @@ where
                 // What happens if a CityObject did not have geometry? Maybe do something like this (but check if .last() == None)
                 // if *interval_groups[ co_type ].last().unwrap() != triangles_len
 
-                if co_type == "Building" {
-
-                    log!("{}, {}, {}", co_type, triangles_len, key);
-
-                }
-
                 interval_groups[ co_type ].push( triangles_len / 3 );
                 
                 id_groups[ co_type ].push( key.to_string() );
@@ -297,13 +301,29 @@ where
 
             }
 
-            let mut triangles: Vec<u32> = Vec::new();
-            let mut groups: HashMap<String, Vec<u32>> = HashMap::new();
+            log!("COs done");
 
             let mut ids = IDS.lock().unwrap();
             let mut intervals = INTERVALS.lock().unwrap();
 
+            let mut triangles_n = 0;
+
+            // Count amount of triangles to be able to init vector with_capacity(n)
             for co_type in &co_types {
+
+                triangles_n += triangle_groups[ &co_type.to_string() ].len();
+
+            }
+
+            let mut res = TrianglesAndGroups { triangles: Vec::with_capacity(triangles_n),
+                                                groups: HashMap::new() };
+            
+            let triangles = &mut res.triangles;
+            let groups = &mut res.groups;
+
+            for co_type in &co_types {
+
+                log!("{}", co_type);
 
                 if triangle_groups[ &co_type.to_string() ].len() > 0 {
 
@@ -327,10 +347,9 @@ where
 
             };
 
-            log!("{:?}", intervals);
-            log!("{:?}", ids);
+            log!("COs done (2)");
 
-            let res = json!( { "triangles": triangles, "groups": groups } );
+            //let res = json!( { "triangles": &triangles, "groups": &groups } );
 
             Ok( res )
 
