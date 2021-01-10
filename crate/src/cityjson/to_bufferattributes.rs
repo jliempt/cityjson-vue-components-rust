@@ -11,6 +11,7 @@ use std::ops::{Index, IndexMut};
 use std::collections::HashMap;
 use super::{WasmMemBuffer};
 
+// Globals for keeping IDs and triangle intervals for these IDs in WASM memory
 lazy_static! {
     pub static ref IDS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 }
@@ -21,9 +22,9 @@ lazy_static! {
 
 
 #[wasm_bindgen]
-pub fn receive_buf(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
+pub fn parse_cityobjects(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
-    log!("Rust: ArrayBuffer received");
+    log!("Rust: Parsing CityObjects...");
 
     // Take the buffer and deserialize it into a CityJSONAttributes
     let mut res: CityJSONAttributes = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
@@ -38,12 +39,14 @@ pub fn receive_buf(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 #[wasm_bindgen]
 pub fn get_vertices(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
-    log!("Rust: getting vertices");
+    log!("Rust: getting vertices...");
 
+    // Take the buffer and deserialize it into a Vertices (flattened vertices vector)
     let vertices: Vertices = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
     
     log!("Rust: vertices parsed");
     
+    // Parse into JsValue to be able to return it to JS
     serde_wasm_bindgen::to_value(&vertices).expect("Could not convert serde_json::Value into JsValue")
 
 }
@@ -244,7 +247,7 @@ struct CityJSONAttributes {
 
 }
 
-/// Deserialize the CityObjects into vectors that can be used for Three.js BufferAttributes
+/// Deserialize the CityObjects into a vector with triangles (for Three.js BufferAttributes) per CityObject type, and store CityObject IDs and triangle intervals
 fn deserialize_cityobjects<'de, D>(deserializer: D) -> Result<TrianglesAndGroups, D::Error>
 where
 
@@ -270,6 +273,7 @@ where
             S: MapAccess<'de>,
         {
 
+            // Progress counter
             let mut i = 1;
         
             let mut triangle_groups = CityObjects { ..Default::default() };
@@ -278,19 +282,19 @@ where
 
             let co_types = ["Building", "BuildingPart", "BuildingInstallation", "Bridge", "BridgePart", "BridgeInstallation", "BridgeConstructionElement", "CityObjectGroup", "CityFurniture", "GenericCityObject", "LandUse", "PlantCover", "Railway", "Road", "SolitaryVegetationObject", "TINRelief", "TransportSquare", "Tunnel", "TunnelPart", "TunnelInstallation", "WaterBody"];
 
+            // Iterate over keys and values in "CityObjects"
             while let Some( ( key, value ) ) = map.next_entry::<String, serde_json::Value>()? {
 
+                // Parse CityObjects geometries into triangle vector per CityObject type
                 parse_cityobject( &key, &value, &mut triangle_groups );
 
                 let co_type: &str = value[ "type" ].as_str().expect( "CityObject has no valid type" );
 
+                // Store ID and triangle interval (the triangles to which this ID belongs) - for each CityObject type, vectors are merged later
                 let triangles_len = triangle_groups[ co_type ].len() as u32;
-
                 // What happens if a CityObject did not have geometry? Maybe do something like this (but check if .last() == None)
                 // if *interval_groups[ co_type ].last().unwrap() != triangles_len
-
-                interval_groups[ co_type ].push( triangles_len / 3 );
-                
+                interval_groups[ co_type ].push( triangles_len / 3 ); // Divided by 3, since triangle vectors are flat and thus every element is a vertex
                 id_groups[ co_type ].push( key.to_string() );
 
                 if i % 1000 == 0 {
@@ -301,20 +305,20 @@ where
 
             }
 
-            log!("COs done");
-
+            // Lock global variables, so that they can be mutated within this scope
             let mut ids = IDS.lock().unwrap();
             let mut intervals = INTERVALS.lock().unwrap();
 
+            // Count amount of triangles to be able to init vector with_capacity(n)
             let mut triangles_n = 0;
 
-            // Count amount of triangles to be able to init vector with_capacity(n)
             for co_type in &co_types {
 
                 triangles_n += triangle_groups[ &co_type.to_string() ].len();
 
             }
 
+            // Merge triangle vectors, create triangle groups (with start index and count, for Three.js)
             let mut res = TrianglesAndGroups { triangles: Vec::with_capacity(triangles_n),
                                                 groups: HashMap::new() };
             
@@ -322,8 +326,6 @@ where
             let groups = &mut res.groups;
 
             for co_type in &co_types {
-
-                log!("{}", co_type);
 
                 if triangle_groups[ &co_type.to_string() ].len() > 0 {
 
@@ -335,24 +337,17 @@ where
 
                     groups.insert( co_type.to_string(), vec!(start as u32, count as u32) );
 
+                    // Globally store IDs and triangle intervals
                     ids.append( &mut id_groups[ co_type ] );
-
-                    // let group_intervals = *interval_groups[ co_type ].into_iter().map( |x| x + start as u32 ).collect();
-
-                    interval_groups[ co_type ].iter_mut().for_each(|x| *x += (start as u32) );
-
+                    // Add current length of triangles to intervals, since the intervals were local for every CityObject type
+                    interval_groups[ co_type ].iter_mut().for_each(|x| *x += ( start as u32 ) );
                     intervals.append( &mut interval_groups[ co_type ] );
 
                 }
 
             };
 
-            log!("COs done (2)");
-
-            //let res = json!( { "triangles": &triangles, "groups": &groups } );
-
             Ok( res )
-
 
         }
     }
@@ -368,7 +363,6 @@ where
 fn parse_cityobject( id: &String, co: &serde_json::Value, triangles: &mut CityObjects ) {
 
     let co_type: &str = co["type"].as_str().expect("CityObject has no valid type");
-
     let mut geom = co.get("geometry");
 
     // Return early if the CityObject has no geometry
@@ -379,16 +373,13 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, triangles: &mut CityOb
     }
 
     let mut geom = geom.expect("CityObject does not have \"geometry\"");
-
     let geom_n = geom.as_array().unwrap().len();
 
     for g_i in 0..geom_n {
 
         let geom_type = &geom[g_i]["type"];
-
         let boundaries = &geom[g_i]["boundaries"];
         let boundaries_n = boundaries.as_array().expect("CityObject does not have \"boundaries\"").len();
-
         
         if geom_type == "Solid" {
 
@@ -440,6 +431,7 @@ fn parse_shell( boundaries: &serde_json::Value, triangles: &mut CityObjects, co_
                         boundaries[b_i][0][1].as_i64().unwrap() as u32,
                         boundaries[b_i][0][2].as_i64().unwrap() as u32 ];
 
+            // Push triangle vertices to correct triangle group
             triangles[ co_type ].push( vs[ 0 ] );
             triangles[ co_type ].push( vs[ 1 ] );
             triangles[ co_type ].push( vs[ 2 ] );

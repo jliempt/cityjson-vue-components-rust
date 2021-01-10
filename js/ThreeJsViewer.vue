@@ -15,7 +15,8 @@ import 'regenerator-runtime/runtime';
 import rust from '../crate/Cargo.toml';
 rust.init();
 
-const filePath = "45bz1.json"
+// Set path to file you want to load (which has to be placed in "./public")
+const filePath = "3db.json"
 
 export default {
 	name: 'ThreeJsViewer',
@@ -120,6 +121,9 @@ export default {
 		this.mesh = null;
 		this.buffer;
 		this.selectedCOColor;
+		this.triangles;
+		this.vertices;
+		this.triangleGroups;
 
 	},
 
@@ -149,17 +153,25 @@ export default {
 				array.set( arr )
 				})
 
-				return rust.receive_buf( self.buffer );
+			})
+			.then( function() {
+
+				// Returns triangles and start/count of triangles per CityObject type, and stores IDs and triangle intervals for IDs in WASM memory
+				let res = rust.parse_cityobjects( self.buffer );
+
+				self.triangles = res.triangles.triangles;
+				self.triangleGroups = res.triangles.groups;
 
 			})
-			.then( function( res ) {
+			.then( function() {
 
-				console.log("JS: COs parsed");
+				let res = rust.get_vertices( self.buffer );
+				self.vertices = res.vertices;
+				
+			})
+			.then( function() {
 
-				// TODO: set vertices in another then
-				let vs = rust.get_vertices( self.buffer );
-
-				self.createGeometry(res.triangles, vs.vertices );
+				self.createGeometry() 
 
 			});
 
@@ -326,42 +338,50 @@ export default {
 			// TODO: properly reinitialise all properties and test if this function works well.
 			this.mesh = null;
 			this.geometry = new THREE.BufferGeometry();
+			this.vertices = null;
+			this.triangles = null;
+			this.triangleGroups = null;
 
 		},
 
-		async createGeometry( triangles, vertices ) {
-
-			console.log(triangles.groups);
+		createGeometry() {
 
 			// Set triangles and vertices
-			this.geometry.setIndex( triangles.triangles );
-			this.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
+			this.geometry.setIndex( this.triangles );
+			this.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( this.vertices, 3 ) );
 
-			// Create geometry groups (for every CityObject type)
+			// Create geometry groups (for every CityObject type) with a material that has the correct color
 			var materials = [];
-			for ( const [ coType, triangleIndices ] of triangles.groups.entries() ) {
+			for ( const [ coType, groupInfo ] of this.triangleGroups.entries() ) {
 
 				var material = new THREE.MeshLambertMaterial();
 				material.color = new THREE.Color( this.object_colors[ coType ] );
 				materials.push( material );
 
-				console.log(triangleIndices[ 0 ], triangleIndices[ 1 ]);
+				let groupStart = groupInfo[ 0 ];
+				let groupCount = groupInfo[ 1 ];
 
-				// triangleIndices[ 0 ] = start index, triangleIndices[ 1 ] = triangle count
-				this.geometry.addGroup( triangleIndices[ 0 ], triangleIndices[ 1 ], materials.length - 1 )
-
+				this.geometry.addGroup( groupStart, groupCount, materials.length - 1 )
 
 			}
-
-			// var material = new THREE.MeshLambertMaterial();
-			// material.color = new THREE.Color( this.object_colors[ "Building" ] );
 
 			this.mesh = new THREE.Mesh( this.geometry, materials );
 			this.mesh.castShadow = true;
 			this.mesh.receiveShadow = true;
 
 			// Normalize coordinates
-			// TODO: normalise vertices before loading into buffer?
+			// TODO: normalise vertices before loading into buffer? Or do in Rust? It seems fast though
+			this.normalizeGeom();
+
+			this.scene.add( this.mesh );
+			console.log("Mesh added to scene");
+			this.renderer.render( this.scene, this.camera );
+
+		},
+
+		normalizeGeom() {
+
+			// Basically taken from Three's Geometry.normalize() source, for some reason it doesn't exist from BufferGeometry
 			this.geometry.computeBoundingSphere();
 
 			const center = this.geometry.boundingSphere.center;
@@ -379,14 +399,6 @@ export default {
 
 			this.geometry.applyMatrix4( matrix );
 			this.geometry.computeVertexNormals();
-
-			// this.geometry.setDrawRange( 0, 100000 );
-
-			this.scene.add( this.mesh );
-
-			console.log("Geometry added to scene");
-
-			this.renderer.render( this.scene, this.camera );
 
 		},
 
