@@ -20,11 +20,16 @@ lazy_static! {
     pub static ref INTERVALS: Mutex<Vec<u32>> = Mutex::new(vec![0]);
 }
 
+static mut TRIANGULATED: bool = false;
 
 #[wasm_bindgen]
 pub fn parse_cityobjects(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
     log!("Rust: Parsing CityObjects...");
+
+    unsafe {
+        TRIANGULATED = true;
+    }
 
     // Take the buffer and deserialize it into a ThreeAttributes
     let mut res: ThreeAttributes = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
@@ -52,6 +57,10 @@ pub fn parse_vertices( buf: &WasmMemBuffer ) -> wasm_bindgen::JsValue {
 }
 
 pub fn parse_all( buf: &WasmMemBuffer ) -> wasm_bindgen::JsValue {
+
+    unsafe {
+        TRIANGULATED = false;
+    }
 
     log!("Rust: getting vertices...");
 
@@ -164,10 +173,11 @@ impl<T> IndexMut<&'_ str> for CityObjectsAttributes<T> {
 }
 
 #[derive(Serialize, Deserialize, Default)]
-struct TrianglesGroups {
+struct ThreeGroups {
 
     triangles: Vec<u32>,
     groups: HashMap<String, Vec<u32>>,
+    vertices: Vec<u32>,
 
 }
 
@@ -177,14 +187,14 @@ struct ThreeAttributes {
     // Iterate over CityObjects and parse them into BufferAttributes
     #[serde(deserialize_with = "deserialize_cityobjects")]
     #[serde(rename(deserialize = "CityObjects"))]
-    attributes: TrianglesGroups
+    attributes: ThreeGroups
 
 }
 
 
 
 /// Deserialize the CityObjects into a vector with triangles (for Three.js BufferAttributes) per CityObject type, and store CityObject IDs and triangle intervals
-fn deserialize_cityobjects<'de, D>(deserializer: D) -> Result<TrianglesGroups, D::Error>
+fn deserialize_cityobjects<'de, D>(deserializer: D) -> Result<ThreeGroups, D::Error>
 where
 
     D: Deserializer<'de>,
@@ -196,7 +206,7 @@ where
     impl<'de> Visitor<'de> for COVisitor
     {
         /// Return type of this visitor
-        type Value = TrianglesGroups;
+        type Value = ThreeGroups;
 
         // Error message if data that is not of this type is encountered while deserializing
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -204,7 +214,7 @@ where
         }
 
         // Traverse CityObjects
-        fn visit_map<S>(self, mut map: S) -> Result<TrianglesGroups, S::Error>
+        fn visit_map<S>(self, mut map: S) -> Result<ThreeGroups, S::Error>
         where
             S: MapAccess<'de>,
         {
@@ -254,9 +264,10 @@ where
 
             }
 
-            // Merge triangle vectors, create triangle groups (with start index and count, for Three.js)
-            let mut res = TrianglesGroups { triangles: Vec::with_capacity(triangles_n),
-                                                groups: HashMap::new() };
+            // Merge triangle vectors, create triangle groups (for Three.js, with start index and count)
+            let mut res = ThreeGroups { triangles: Vec::with_capacity(triangles_n),
+                                        groups: HashMap::new(),
+                                        vertices: Vec::<u32>::new() };
             
             let triangles = &mut res.triangles;
             let groups = &mut res.groups;
