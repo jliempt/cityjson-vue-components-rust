@@ -1,8 +1,8 @@
 There are four optimisations that can be implemented individually:
-1. Parsing the CityJSON geometries into an indexed BufferGeometry with groups
-1. Being able to assume that a file is triangulated
-1. Reading the JSON in a stream rather than fully loading it into memory
-1. Doing the CityJSON -> Three.js mesh parsing in Rust
+* Parsing the CityJSON geometries into an indexed BufferGeometry with groups
+* Being able to assume that a file is triangulated
+* Reading the JSON in a stream rather than fully loading it into memory
+* Doing the CityJSON -> Three.js mesh parsing in Rust
 
 
 1. BufferGeometry  
