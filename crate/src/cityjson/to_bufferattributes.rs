@@ -26,18 +26,18 @@ pub fn parse_cityobjects(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
     log!("Rust: Parsing CityObjects...");
 
-    // Take the buffer and deserialize it into a CityJSONAttributes
-    let mut res: CityJSONAttributes = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
+    // Take the buffer and deserialize it into a ThreeAttributes
+    let mut res: ThreeAttributes = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
 
     log!("Rust: CityObjects parsed");
 
     // Parse into JsValue to be able to return it to JS
-    serde_wasm_bindgen::to_value( &res ).expect("Could not convert serde_json::Value into JsValue")
+    serde_wasm_bindgen::to_value( &res.attributes ).expect("Could not convert serde_json::Value into JsValue")
 
 }
 
 #[wasm_bindgen]
-pub fn get_vertices(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
+pub fn parse_vertices( buf: &WasmMemBuffer ) -> wasm_bindgen::JsValue {
 
     log!("Rust: getting vertices...");
 
@@ -47,7 +47,29 @@ pub fn get_vertices(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
     log!("Rust: vertices parsed");
     
     // Parse into JsValue to be able to return it to JS
-    serde_wasm_bindgen::to_value(&vertices).expect("Could not convert serde_json::Value into JsValue")
+    serde_wasm_bindgen::to_value(&vertices.vertices).expect("Could not convert serde_json::Value into JsValue")
+
+}
+
+pub fn parse_all( buf: &WasmMemBuffer ) -> wasm_bindgen::JsValue {
+
+    log!("Rust: getting vertices...");
+
+    // Take the buffer and deserialize it into a Vertices (flattened vertices vector)
+    let vertices: Vertices = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
+
+    log!("Rust: vertices parsed");
+
+    log!("Rust: Parsing CityObjects...");
+
+    // Take the buffer and deserialize it into a ThreeAttributes
+    let mut res: ThreeAttributes = serde_json::from_slice(&buf.buffer).expect("Error parsing CityJSON buffer");
+
+    log!("Rust: CityObjects parsed");
+
+    // Parse into JsValue to be able to return it to JS
+    serde_wasm_bindgen::to_value( &res.attributes ).expect("Could not convert serde_json::Value into JsValue")
+
 
 }
 
@@ -55,63 +77,35 @@ pub fn get_vertices(buf: &WasmMemBuffer) -> wasm_bindgen::JsValue {
 
 // Default enables easy initialization (with CityObjects { ..Default::default() }; )
 #[derive(Serialize, Deserialize, Default)]
-struct CityObjects {
+struct CityObjectsAttributes<T> {
 
-    Building: Vec<u32>,
-    BuildingPart: Vec<u32>,
-    BuildingInstallation: Vec<u32>,
-    Bridge: Vec<u32>,
-    BridgePart: Vec<u32>,
-    BridgeInstallation: Vec<u32>,
-    BridgeConstructionElement: Vec<u32>,
-    CityObjectGroup: Vec<u32>,
-    CityFurniture: Vec<u32>,
-    GenericCityObject: Vec<u32>,
-    LandUse: Vec<u32>,
-    PlantCover: Vec<u32>,
-    Railway: Vec<u32>,
-    Road: Vec<u32>,
-    SolitaryVegetationObject: Vec<u32>,
-    TINRelief: Vec<u32>,
-    TransportSquare: Vec<u32>,
-    Tunnel: Vec<u32>,
-    TunnelPart: Vec<u32>,
-    TunnelInstallation: Vec<u32>,
-    WaterBody: Vec<u32>,
-
-}
-
-#[derive(Serialize, Deserialize, Default)]
-struct CityObjectsIDs {
-
-    Building: Vec<String>,
-    BuildingPart: Vec<String>,
-    BuildingInstallation: Vec<String>,
-    Bridge: Vec<String>,
-    BridgePart: Vec<String>,
-    BridgeInstallation: Vec<String>,
-    BridgeConstructionElement: Vec<String>,
-    CityObjectGroup: Vec<String>,
-    CityFurniture: Vec<String>,
-    GenericCityObject: Vec<String>,
-    LandUse: Vec<String>,
-    PlantCover: Vec<String>,
-    Railway: Vec<String>,
-    Road: Vec<String>,
-    SolitaryVegetationObject: Vec<String>,
-    TINRelief: Vec<String>,
-    TransportSquare: Vec<String>,
-    Tunnel: Vec<String>,
-    TunnelPart: Vec<String>,
-    TunnelInstallation: Vec<String>,
-    WaterBody: Vec<String>,
+    Building: Vec<T>,
+    BuildingPart: Vec<T>,
+    BuildingInstallation: Vec<T>,
+    Bridge: Vec<T>,
+    BridgePart: Vec<T>,
+    BridgeInstallation: Vec<T>,
+    BridgeConstructionElement: Vec<T>,
+    CityObjectGroup: Vec<T>,
+    CityFurniture: Vec<T>,
+    GenericCityObject: Vec<T>,
+    LandUse: Vec<T>,
+    PlantCover: Vec<T>,
+    Railway: Vec<T>,
+    Road: Vec<T>,
+    SolitaryVegetationObject: Vec<T>,
+    TINRelief: Vec<T>,
+    TransportSquare: Vec<T>,
+    Tunnel: Vec<T>,
+    TunnelPart: Vec<T>,
+    TunnelInstallation: Vec<T>,
+    WaterBody: Vec<T>,
 
 }
 
-
-impl Index<&'_ str> for CityObjects {
-    type Output = Vec<u32>;
-    fn index(&self, s: &str) -> &Vec<u32> {
+impl<T> Index<&'_ str> for CityObjectsAttributes<T> {
+    type Output = Vec<T>;
+    fn index(&self, s: &str) -> &Vec<T> {
         match s {
             "Building" => &self.Building,
             "BuildingPart" => &self.BuildingPart,
@@ -139,69 +133,9 @@ impl Index<&'_ str> for CityObjects {
     }
 }
 
-impl IndexMut<&'_ str> for CityObjects {
+impl<T> IndexMut<&'_ str> for CityObjectsAttributes<T> {
 
-    fn index_mut(&mut self, s: &str) -> &mut Vec<u32> {
-        match s {
-            "Building" => &mut self.Building,
-            "BuildingPart" => &mut self.BuildingPart,
-            "BuildingInstallation" => &mut self.BuildingInstallation,
-            "Bridge" => &mut self.Bridge,
-            "BridgePart" => &mut self.BridgePart,
-            "BridgeInstallation" => &mut self.BridgeInstallation,
-            "BridgeConstructionElement" => &mut self.BridgeConstructionElement,
-            "CityObjectGroup" => &mut self.CityObjectGroup,
-            "CityFurniture" => &mut self.CityFurniture,
-            "GenericCityObject" => &mut self.GenericCityObject,
-            "LandUse" => &mut self.LandUse,
-            "PlantCover" => &mut self.PlantCover,
-            "Railway" => &mut self.Railway,
-            "Road" => &mut self.Road,
-            "SolitaryVegetationObject" => &mut self.SolitaryVegetationObject,
-            "TINRelief" => &mut self.TINRelief,
-            "TransportSquare" => &mut self.TransportSquare,
-            "Tunnel" => &mut self.Tunnel,
-            "TunnelPart" => &mut self.TunnelPart,
-            "TunnelInstallation" => &mut self.TunnelInstallation,
-            "WaterBody" => &mut self.WaterBody,
-            _ => panic!("unknown field: {}", s),
-        }
-    }
-}
-
-impl Index<&'_ str> for CityObjectsIDs {
-    type Output = Vec<String>;
-    fn index(&self, s: &str) -> &Vec<String> {
-        match s {
-            "Building" => &self.Building,
-            "BuildingPart" => &self.BuildingPart,
-            "BuildingInstallation" => &self.BuildingInstallation,
-            "Bridge" => &self.Bridge,
-            "BridgePart" => &self.BridgePart,
-            "BridgeInstallation" => &self.BridgeInstallation,
-            "BridgeConstructionElement" => &self.BridgeConstructionElement,
-            "CityObjectGroup" => &self.CityObjectGroup,
-            "CityFurniture" => &self.CityFurniture,
-            "GenericCityObject" => &self.GenericCityObject,
-            "LandUse" => &self.LandUse,
-            "PlantCover" => &self.PlantCover,
-            "Railway" => &self.Railway,
-            "Road" => &self.Road,
-            "SolitaryVegetationObject" => &self.SolitaryVegetationObject,
-            "TINRelief" => &self.TINRelief,
-            "TransportSquare" => &self.TransportSquare,
-            "Tunnel" => &self.Tunnel,
-            "TunnelPart" => &self.TunnelPart,
-            "TunnelInstallation" => &self.TunnelInstallation,
-            "WaterBody" => &self.WaterBody,
-            _ => panic!("unknown field: {}", s),
-        }
-    }
-}
-
-impl IndexMut<&'_ str> for CityObjectsIDs {
-
-    fn index_mut(&mut self, s: &str) -> &mut Vec<String> {
+    fn index_mut(&mut self, s: &str) -> &mut Vec<T> {
         match s {
             "Building" => &mut self.Building,
             "BuildingPart" => &mut self.BuildingPart,
@@ -230,7 +164,7 @@ impl IndexMut<&'_ str> for CityObjectsIDs {
 }
 
 #[derive(Serialize, Deserialize, Default)]
-struct TrianglesAndGroups {
+struct TrianglesGroups {
 
     triangles: Vec<u32>,
     groups: HashMap<String, Vec<u32>>,
@@ -238,17 +172,19 @@ struct TrianglesAndGroups {
 }
 
 #[derive(Serialize, Deserialize)]
-struct CityJSONAttributes {
+struct ThreeAttributes {
 
     // Iterate over CityObjects and parse them into BufferAttributes
     #[serde(deserialize_with = "deserialize_cityobjects")]
     #[serde(rename(deserialize = "CityObjects"))]
-    triangles: TrianglesAndGroups
+    attributes: TrianglesGroups
 
 }
 
+
+
 /// Deserialize the CityObjects into a vector with triangles (for Three.js BufferAttributes) per CityObject type, and store CityObject IDs and triangle intervals
-fn deserialize_cityobjects<'de, D>(deserializer: D) -> Result<TrianglesAndGroups, D::Error>
+fn deserialize_cityobjects<'de, D>(deserializer: D) -> Result<TrianglesGroups, D::Error>
 where
 
     D: Deserializer<'de>,
@@ -260,7 +196,7 @@ where
     impl<'de> Visitor<'de> for COVisitor
     {
         /// Return type of this visitor
-        type Value = TrianglesAndGroups;
+        type Value = TrianglesGroups;
 
         // Error message if data that is not of this type is encountered while deserializing
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -268,7 +204,7 @@ where
         }
 
         // Traverse CityObjects
-        fn visit_map<S>(self, mut map: S) -> Result<TrianglesAndGroups, S::Error>
+        fn visit_map<S>(self, mut map: S) -> Result<TrianglesGroups, S::Error>
         where
             S: MapAccess<'de>,
         {
@@ -276,9 +212,9 @@ where
             // Progress counter
             let mut i = 1;
         
-            let mut triangle_groups = CityObjects { ..Default::default() };
-            let mut interval_groups = CityObjects { ..Default::default() };
-            let mut id_groups = CityObjectsIDs { ..Default::default() };
+            let mut triangle_groups = CityObjectsAttributes { ..Default::default() };
+            let mut interval_groups = CityObjectsAttributes { ..Default::default() };
+            let mut id_groups = CityObjectsAttributes { ..Default::default() };
 
             let co_types = ["Building", "BuildingPart", "BuildingInstallation", "Bridge", "BridgePart", "BridgeInstallation", "BridgeConstructionElement", "CityObjectGroup", "CityFurniture", "GenericCityObject", "LandUse", "PlantCover", "Railway", "Road", "SolitaryVegetationObject", "TINRelief", "TransportSquare", "Tunnel", "TunnelPart", "TunnelInstallation", "WaterBody"];
 
@@ -319,7 +255,7 @@ where
             }
 
             // Merge triangle vectors, create triangle groups (with start index and count, for Three.js)
-            let mut res = TrianglesAndGroups { triangles: Vec::with_capacity(triangles_n),
+            let mut res = TrianglesGroups { triangles: Vec::with_capacity(triangles_n),
                                                 groups: HashMap::new() };
             
             let triangles = &mut res.triangles;
@@ -360,7 +296,7 @@ where
 
 }
 
-fn parse_cityobject( id: &String, co: &serde_json::Value, triangles: &mut CityObjects ) {
+fn parse_cityobject( id: &String, co: &serde_json::Value, triangles: &mut CityObjectsAttributes<u32> ) {
 
     let co_type: &str = co["type"].as_str().expect("CityObject has no valid type");
     let mut geom = co.get("geometry");
@@ -415,7 +351,7 @@ fn parse_cityobject( id: &String, co: &serde_json::Value, triangles: &mut CityOb
 
 }
 
-fn parse_shell( boundaries: &serde_json::Value, triangles: &mut CityObjects, co_type: &str, id: &str ){
+fn parse_shell( boundaries: &serde_json::Value, triangles: &mut CityObjectsAttributes<u32>, co_type: &str, id: &str ){
 
     let boundaries_n = boundaries.as_array().unwrap().len();
 

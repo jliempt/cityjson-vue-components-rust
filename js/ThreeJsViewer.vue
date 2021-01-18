@@ -159,14 +159,14 @@ export default {
 				// Returns triangles and start/count of triangles per CityObject type, and stores IDs and triangle intervals for IDs in WASM memory
 				let res = rust.parse_cityobjects( self.buffer );
 
-				self.triangles = res.triangles.triangles;
-				self.triangleGroups = res.triangles.groups;
+				self.triangles = res.triangles;
+				self.triangleGroups = res.groups;
 
 			})
 			.then( function() {
 
-				let res = rust.get_vertices( self.buffer );
-				self.vertices = res.vertices;
+				let res = rust.parse_vertices( self.buffer );
+				self.vertices = res;
 				
 			})
 			.then( function() {
